@@ -23,6 +23,7 @@ const AccountSubscriptionSchema = z
     object: z.literal("subscription"),
     status: z.enum(ACCOUNT_STATUSES),
     livemode: z.boolean(),
+    checkout_session: z.string().nullable(),
     merchant: z.object({ name: z.string(), logo_url: z.string().nullable(), support_url: z.string().nullable() }),
     product: z.object({ name: z.string(), rate_usd_per_second: z.string() }),
     started_at: z.number().int().nullable(),
@@ -176,7 +177,14 @@ account.openapi(
       RETURNING id`;
     if (!claimed) throw new ApiError(429, "rate_limit_error", "Already sent. Check your inbox.", undefined, "receipt_already_sent");
     const mail = receiptEmail(serializeAccountSubscription(sub, now));
-    await sendEmail({ to: who.email, subject: mail.subject, text: mail.text });
+    try {
+      await sendEmail({ to: who.email, subject: mail.subject, text: mail.text });
+    } catch (e) {
+      // Give the slot back so the next tap can try again; the provider's reason goes to the log, never the address.
+      await sql`UPDATE subscriptions SET receipt_emailed_at = NULL WHERE id = ${sub.id}`;
+      console.error("receipt_email_failed", { subscription: sub.id, reason: e instanceof Error ? e.message.split("\n")[0] : String(e) });
+      throw new ApiError(502, "api_error", "We couldn't send the receipt right now. Try again in a moment.", undefined, "receipt_email_failed");
+    }
     return c.json({ sent: true as const }, 200);
   },
 );

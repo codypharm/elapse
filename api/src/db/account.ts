@@ -64,6 +64,7 @@ export function serializeAccountSubscription(row: AccountRow, now = Math.floor(D
     object: "subscription" as const,
     status: s.status as AccountStatus,
     livemode: s.livemode,
+    checkout_session: row.checkout_session_id,
     merchant: { name: row.merchant_name, logo_url: row.merchant_logo_url, support_url: row.merchant_support_url },
     product: { name: row.product_name ?? "", rate_usd_per_second: s.rate_usd_per_second },
     started_at: s.started_at,

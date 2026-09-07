@@ -135,6 +135,7 @@ describe("FR-API-031 retrieve: two projections", () => {
       product: { id: prod.id, name: "GPU hour", rate_usd_per_second: "0.004", allow_pause: true, active: true },
       customer: null,
       subscription: null,
+      last_max_duration_seconds: null,
       max_duration_seconds: 3600,
       max_escrow_usd: "14.4",
     });

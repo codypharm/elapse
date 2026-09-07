@@ -65,6 +65,7 @@ describe("FR-API-121 account subscriptions", () => {
     expect(row).toMatchObject({ status: "active", livemode: false, product: { name: "GPU", rate_usd_per_second: "0.004" }, max_duration_seconds: 3600, funded_usd: "14.4", settled_usd: "0", refunded_usd: "0", ended_reason: null });
     expect(row.merchant).toEqual({ name: "Acme GPU", logo_url: null, support_url: null });
     expect(typeof row.started_at).toBe("number");
+    expect(row.checkout_session).toMatch(/^cs_/);
     expect(typeof row.seconds_elapsed).toBe("number");
     // never keys, endpoints, payout addresses, wallets or stream addresses
     const text = JSON.stringify(r.body);
@@ -138,5 +139,24 @@ describe("FR-API-123 receipt email", () => {
     // no email on the identity → 400; a stranger → 404
     expect((await api("POST", `/v1/account/subscriptions/${subId}/receipt/email`, { body: {}, headers: await identity() })).status).toBe(400);
     expect((await api("POST", `/v1/account/subscriptions/${subId}/receipt/email`, { body: {}, headers: await identity(stranger.address, "x@y.test") })).status).toBe(404);
+  });
+
+  it("FR_CHK_029_a_failed_send_releases_the_slot_and_answers_502_so_the_next_tap_can_try_again", async () => {
+    const { subId, stream } = await liveSession(m);
+    const cancelTx = "0x" + "c".repeat(64);
+    await api("POST", "/internal/ingest", { headers: INGEST, body: { ...settled(220, "880000", "8800", T0 + 220, cancelTx), address: stream } });
+    await api("POST", "/internal/ingest", { headers: INGEST, body: { ...streamCanceled(T0 + 220, 220, "880000", "13520000", cancelTx), address: stream } });
+    setMailer(async () => {
+      throw new Error("Resend responded 403: domain not verified");
+    });
+    const failed = await api("POST", `/v1/account/subscriptions/${subId}/receipt/email`, { body: {}, headers: await identity(subscriber.address, "sub@example.com") });
+    expect(failed.status).toBe(502);
+    expect(failed.body.error.message).toBe("We couldn't send the receipt right now. Try again in a moment.");
+    setMailer(async (mail) => {
+      mails.push(mail);
+    });
+    const ok = await api("POST", `/v1/account/subscriptions/${subId}/receipt/email`, { body: {}, headers: await identity(subscriber.address, "sub@example.com") });
+    expect(ok.status).toBe(200);
+    expect(mails).toHaveLength(1);
   });
 });

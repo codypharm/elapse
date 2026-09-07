@@ -7,13 +7,14 @@ import { findProduct, type ProductRow } from "../db/products";
 import { ApiError, invalid, notFound } from "../lib/errors";
 import { findSubscription, serializeSubscription, type SubscriptionRow } from "../db/subscriptions";
 import { findCustomer } from "../db/customers";
+import { sql } from "../db/client";
 import { RelayerUnavailable } from "../chain/relayer";
 import { SubscriberAuthError, SubscriberAuthUnconfigured, verifyIdentityToken, type SubscriberIdentity } from "../lib/privy";
 import { CheckoutStateError, prepareSession, startSession, prepareCancel, cancelSubscription, PERMIT_TTL_SECONDS, CANCEL_TTL_SECONDS } from "../services/checkout";
 import { PERMIT_TYPES } from "../chain/permit";
 import { baseUnitsToDecimal } from "../lib/money";
 import { PUBLIC, router } from "../lib/openapi";
-import { merchantAuth, requireAuth, type AnyAuth, type Auth, type CheckoutAuthEnv } from "../middleware/auth";
+import { merchantAuth, requireAuth, type AnyAuth, type Auth, type CheckoutAuthEnv, clientIp } from "../middleware/auth";
 import { ProductSchema, serializeProduct } from "./products";
 
 /**
@@ -106,6 +107,7 @@ export const PublicCheckoutSessionSchema = z
     subscription: SubscriptionSchema.nullable(),
     max_duration_seconds: z.number().int().nullable(),
     max_escrow_usd: z.string().nullable(),
+    last_max_duration_seconds: z.number().int().nullable(),
   })
   .openapi("PublicCheckoutSession");
 
@@ -191,6 +193,7 @@ export function serializePublicSession(
     },
     customer,
     subscription: sub ? serializeSubscription(sub) : null,
+    last_max_duration_seconds: s.last_max_duration_seconds,
     max_duration_seconds: s.max_duration_seconds,
     max_escrow_usd: maxEscrowUsd(product, s.max_duration_seconds),
   };
@@ -454,6 +457,54 @@ checkoutSessions.openapi(
     } catch (e) {
       mapCheckoutError(e);
     }
+  },
+);
+
+// ─── Start again (FR-API-126, ADR 2026-09-07 start again) ───────────────────────────────
+
+const AgainResponse = z.object({ id: z.string(), url: z.string() }).openapi("CheckoutSessionAgain");
+const AGAIN_PER_HOUR = 10;
+
+checkoutSessions.openapi(
+  createRoute({
+    method: "post",
+    path: "/checkout/sessions/{id}/again",
+    operationId: "checkout.sessions.again",
+    tags: ["Checkout"],
+    hide: true,
+    middleware: [requireAuth({ keys: ["pk"], session: false, checkout: true })] as const,
+    request: { params: z.object({ id: z.string() }) },
+    responses: { 201: { description: "A fresh open session for the same product, bound to the same subscriber.", content: { "application/json": { schema: AgainResponse } } } },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const session = await loadSession(c.get("auth"), id);
+    const who = await subscriberIdentity(c);
+    // The token must be the session's own Customer; anyone else is told nothing beyond the mismatch.
+    const cus = session.customer_id ? await findCustomer(session.merchant_id, session.livemode, session.customer_id) : null;
+    if (!cus || cus.wallet_address.toLowerCase() !== who.walletAddress.toLowerCase()) {
+      throw new ApiError(403, "authentication_error", "Signed in as a different subscriber.", undefined, "subscriber_mismatch");
+    }
+    const sub = session.subscription_id ? await findSubscription(session.merchant_id, session.livemode, session.subscription_id) : null;
+    if (!sub || sub.status !== "canceled") throw new ApiError(409, "invalid_request_error", "The meter has not ended yet.", undefined, "not_ended");
+    const product = await findProduct(session.merchant_id, session.livemode, session.product_id);
+    if (!product || !product.active) throw new ApiError(400, "invalid_request_error", "This product is no longer available.", undefined, "product_archived");
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM checkout_sessions WHERE again_of = ${session.id} AND created_at > now() - interval '1 hour'`;
+    if (n >= AGAIN_PER_HOUR) throw new ApiError(429, "rate_limit_error", "Too many new sessions from this receipt. Try again later.", undefined, "again_rate_limited");
+    const row = await insertCheckoutSession({
+      merchantId: session.merchant_id,
+      livemode: session.livemode,
+      productId: product.id,
+      successUrl: session.success_url,
+      cancelUrl: session.cancel_url,
+      maxDurationSeconds: session.max_duration_seconds,
+      ttlSeconds: SESSION_TTL_SECONDS,
+      customerId: cus.id,
+      lastMaxDurationSeconds: sub.max_duration_seconds,
+      againOf: session.id,
+    });
+    await sql`INSERT INTO audit_log (merchant_id, actor, action, target, ip) VALUES (${session.merchant_id}, 'checkout', 'checkout_session.again', ${`${session.id} -> ${row.id}`}, ${clientIp(c)})`;
+    return c.json({ id: row.id, url: `${config.checkoutBaseUrl}/c/${row.id}` }, 201);
   },
 );
 

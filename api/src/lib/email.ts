@@ -41,5 +41,9 @@ async function viaResend(key: string, mail: Mail): Promise<void> {
     body: JSON.stringify({ from: config.email.from, to: [mail.to], subject: mail.subject, text: mail.text, ...(mail.html ? { html: mail.html } : {}) }),
     signal: AbortSignal.timeout(10_000),
   });
-  if (!res.ok) throw new Error(`Resend responded ${res.status}`);
+  if (!res.ok) {
+    // Resend's body names the cause (unverified domain, bad recipient); it never contains the key.
+    const detail = (await res.text().catch(() => "")).slice(0, 200);
+    throw new Error(`Resend responded ${res.status}${detail ? `: ${detail}` : ""}`);
+  }
 }

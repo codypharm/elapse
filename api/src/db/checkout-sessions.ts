@@ -13,11 +13,13 @@ export interface CheckoutSessionRow {
   status: "open" | "complete" | "expired";
   expires_at: Date;
   max_duration_seconds: number | null;
+  /** The cap the subscriber chose on the session this one was opened from (FR-API-126), for the page to preselect. */
+  last_max_duration_seconds: number | null;
   created_at: Date;
 }
 
 const COLS = sql`id, merchant_id, livemode, product_id, customer_id, subscription_id, success_url, cancel_url,
-  status, expires_at, max_duration_seconds, created_at`;
+  status, expires_at, max_duration_seconds, last_max_duration_seconds, created_at`;
 
 export async function insertCheckoutSession(input: {
   merchantId: string;
@@ -27,12 +29,16 @@ export async function insertCheckoutSession(input: {
   cancelUrl: string;
   maxDurationSeconds: number | null;
   ttlSeconds: number;
+  /** FR-API-126: the follow-on session is bound to the same Customer and remembers the last cap and its origin. */
+  customerId?: string | null;
+  lastMaxDurationSeconds?: number | null;
+  againOf?: string | null;
 }): Promise<CheckoutSessionRow> {
   const id = newId("cs");
   const [row] = await sql`
-    INSERT INTO checkout_sessions (id, merchant_id, livemode, product_id, success_url, cancel_url, expires_at, max_duration_seconds)
+    INSERT INTO checkout_sessions (id, merchant_id, livemode, product_id, success_url, cancel_url, expires_at, max_duration_seconds, customer_id, last_max_duration_seconds, again_of)
     VALUES (${id}, ${input.merchantId}, ${input.livemode}, ${input.productId}, ${input.successUrl}, ${input.cancelUrl},
-            now() + make_interval(secs => ${input.ttlSeconds}), ${input.maxDurationSeconds})
+            now() + make_interval(secs => ${input.ttlSeconds}), ${input.maxDurationSeconds}, ${input.customerId ?? null}, ${input.lastMaxDurationSeconds ?? null}, ${input.againOf ?? null})
     RETURNING ${COLS}`;
   return row as CheckoutSessionRow;
 }
