@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { sql } from "../src/db/client";
 import { api, resetDb, seedMerchant } from "./helpers";
 import { setIndexerReader } from "../src/lib/indexer";
+import { deploymentFor } from "../src/chain/deployments";
 
 beforeEach(async () => {
   await resetDb();
@@ -15,7 +16,7 @@ describe("FR-API-074 status", () => {
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({
       chain_id: 10143,
-      contracts: { factory: "0x656fa8b348981602acf36fad07804e806cc15d5b" },
+      contracts: { factory: deploymentFor(10143).factory.toLowerCase() },
       indexer: { latest_block: 60_010_000, head_block: 60_010_004, lag_blocks: 4, unsent_events: 0, ok: true },
       worker: { queued: 0, oldest_queued_age_s: 0 },
     });
