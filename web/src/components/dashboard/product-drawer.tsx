@@ -22,7 +22,7 @@ import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetT
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { ProductInput } from "@/lib/dashboard/mock-api";
-import { check, rules } from "@/lib/forms/rules";
+import { accepted, check, rules } from "@/lib/forms/rules";
 import { FieldHint } from "@/components/ui/field-hint";
 import type { Product } from "@/lib/dashboard/types";
 import { formatUsd, parseRate, perHour, perMinute } from "@/lib/meter/math";
@@ -105,7 +105,7 @@ export function ProductDrawer({
                   <Input
                     id="product-rate"
                     value={rate}
-                    onChange={(e) => setRate(e.target.value)}
+                    onChange={(e) => setRate((prev) => accepted(rules.rate, prev, e.target.value))}
                     onBlur={() => setTouched((t) => ({ ...t, rate: true }))}
                     placeholder="0.004"
                     inputMode="decimal"

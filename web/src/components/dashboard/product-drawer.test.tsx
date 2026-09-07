@@ -17,13 +17,17 @@ describe("ProductDrawer", () => {
     expect(name).toHaveAttribute("maxlength", "200");
     expect(screen.getByLabelText(/Description/)).toHaveAttribute("maxlength", "1000");
     await userEvent.type(name, "  GPU  ");
+    // FR-DSH-114: the rate field refuses keystrokes that could never form a rate (letters, a second
+    // dot, a seventh decimal) instead of accepting them and complaining afterwards.
     await userEvent.type(rate, "abc");
-    expect(screen.getByText("Enter a decimal like 0.004.")).toBeInTheDocument();
+    expect(rate).toHaveValue("");
+    expect(screen.queryByText("Enter a decimal like 0.004.")).toBeNull();
     expect(save).toBeDisabled();
-    await userEvent.clear(rate);
     await userEvent.type(rate, "0.0000001");
-    expect(screen.getByText("Use at most 6 decimal places.")).toBeInTheDocument();
-    expect(save).toBeDisabled();
+    expect(rate).toHaveValue("0.000000");
+    await userEvent.clear(rate);
+    await userEvent.type(rate, "0..0-04x");
+    expect(rate).toHaveValue("0.004");
     await userEvent.clear(rate);
     await userEvent.type(rate, "0.004");
     expect(screen.getByText(/\/ min ·/)).toBeInTheDocument();

@@ -13,7 +13,7 @@ import { useAuthFlow, type AuthResult } from "@/lib/checkout/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FieldHint } from "@/components/ui/field-hint";
-import { check, rules } from "@/lib/forms/rules";
+import { accepted, check, rules } from "@/lib/forms/rules";
 import {
   Sheet,
   SheetContent,
@@ -260,7 +260,7 @@ export function FaceIdSheet({
               autoComplete="one-time-code"
               placeholder="123456"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode((prev) => accepted(rules.code, prev, e.target.value))}
               aria-label="One-time code"
               aria-invalid={code.trim().length >= 6 && codeProblem ? true : undefined}
               aria-describedby="checkout-code-hint"

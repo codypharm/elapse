@@ -15,6 +15,12 @@ export interface Rule {
   /** HTML `pattern` attribute (without anchors), when a regex describes the whole value. */
   pattern?: string;
   inputMode?: "text" | "numeric" | "decimal" | "email" | "url";
+  /**
+   * What the field accepts while typing: a prefix that could still become a valid value.
+   * Numeric fields refuse letters, a second dot or a seventh decimal at the keystroke
+   * instead of accepting them and complaining afterwards. Absent = accept anything.
+   */
+  accept?: RegExp;
   /** Returns the message for the first broken rule, or null. Receives the trimmed value. */
   check: (value: string) => string | null;
 }
@@ -22,6 +28,22 @@ export interface Rule {
 /** Trim, then run the rule. */
 export function check(rule: Rule, value: string): string | null {
   return rule.check(value.trim());
+}
+
+/**
+ * The value a controlled input should hold after a change: `next` when the rule accepts it as
+ * a prefix, otherwise the longest acceptable extension of `previous` (so a paste keeps its
+ * usable characters and a refused keystroke changes nothing).
+ */
+export function accepted(rule: Rule, previous: string, next: string): string {
+  if (!rule.accept) return next;
+  if (rule.accept.test(next)) return next;
+  // A paste of several characters: keep the longest acceptable prefix built from `previous`.
+  let kept = previous;
+  for (const ch of next.slice(previous.length)) {
+    if (rule.accept.test(kept + ch)) kept += ch;
+  }
+  return rule.accept.test(kept) ? kept : previous;
 }
 
 const tooLong = (n: number) => `Keep it under ${n} characters.`;
@@ -87,6 +109,7 @@ export const rules = {
   rate: {
     maxLength: 20,
     inputMode: "decimal",
+    accept: /^\d*(\.\d{0,6})?$/,
     check: (v) => {
       if (!RATE.test(v)) return "Enter a decimal like 0.004.";
       const decimals = v.split(".")[1]?.length ?? 0;
@@ -99,6 +122,7 @@ export const rules = {
     maxLength: 5,
     inputMode: "numeric",
     pattern: "[0-9]*",
+    accept: /^\d*$/,
     check: (v) => {
       if (!WHOLE.test(v)) return "Enter whole minutes.";
       const n = Number(v);
@@ -109,6 +133,7 @@ export const rules = {
     maxLength: 6,
     inputMode: "numeric",
     pattern: "[0-9]*",
+    accept: /^\d*$/,
     check: (v) => (CODE.test(v) ? null : "Enter the 6-digit code."),
   } satisfies Rule as Rule,
   /** The same rule, but an empty value is acceptable (a field the merchant may leave blank). */

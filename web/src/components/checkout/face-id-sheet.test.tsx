@@ -79,11 +79,12 @@ describe("FaceIdSheet", () => {
     expect(code).toHaveAttribute("pattern", "[0-9]*");
     await user.type(code, "12345");
     expect(cont()).toBeDisabled();
+    // FR-DSH-114 keystroke filter: a letter never lands in the code field.
     await user.type(code, "a");
-    expect(screen.getByText("Enter the 6-digit code.")).toBeInTheDocument();
+    expect(code).toHaveValue("12345");
     expect(cont()).toBeDisabled();
-    await user.clear(code);
-    await user.type(code, "123456");
+    await user.type(code, "6");
+    expect(code).toHaveValue("123456");
     expect(cont()).toBeEnabled();
     await user.click(cont());
     await waitFor(() => expect(verifyCode).toHaveBeenCalledWith("a@b.co", "123456"));

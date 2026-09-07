@@ -64,10 +64,10 @@ describe("ProductsPage", () => {
     expect(drawer).toHaveTextContent("$0.24 / min");
     expect(drawer).toHaveTextContent("$14.40 / hour");
     await user.clear(rate);
+    // Letters never land in the rate field (FR-DSH-114 keystroke filter); an empty rate cannot be submitted.
     await user.type(rate, "abc");
-    await user.click(within(drawer).getByRole("button", { name: /create product/i }));
-    expect(await within(drawer).findByRole("alert")).toHaveTextContent(/decimal/i);
-    await user.clear(rate);
+    expect(rate).toHaveValue("");
+    expect(within(drawer).getByRole("button", { name: /create product/i })).toBeDisabled();
     await user.type(rate, "0.0015");
     await user.click(within(drawer).getByRole("button", { name: /create product/i }));
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());

@@ -12,7 +12,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FieldHint } from "@/components/ui/field-hint";
-import { check, rules } from "@/lib/forms/rules";
+import { accepted, check, rules } from "@/lib/forms/rules";
 import {
   CAP_PRESETS_SECONDS,
   formatCap,
@@ -131,7 +131,7 @@ export function CapStep({
               autoComplete="off"
               placeholder="30"
               value={minutes}
-              onChange={(e) => setMinutes(e.target.value)}
+              onChange={(e) => setMinutes((prev) => accepted(rules.capMinutes, prev, e.target.value))}
               aria-label="How many minutes"
               aria-invalid={minutesProblem ? true : undefined}
               aria-describedby="cap-minutes-hint"

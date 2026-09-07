@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rules, check } from "./rules";
+import { accepted, rules, check } from "./rules";
 
 // FR-DSH-114: every rule the API enforces, mirrored once. Each case is a value the server
 // would accept or reject, so the client refuses exactly what the server refuses.
@@ -72,5 +72,18 @@ describe("FR-DSH-114 shared field rules", () => {
     expect(check(rules.code, "123456")).toBeNull();
     expect(check(rules.code, "12345")).toBe("Enter the 6-digit code.");
     expect(check(rules.code, "12345a")).toBe("Enter the 6-digit code.");
+  });
+});
+
+describe("accepted (keystroke filter)", () => {
+  it("FR_DSH_114_numeric_fields_refuse_what_could_never_become_a_value", () => {
+    expect(accepted(rules.rate, "", "a")).toBe("");
+    expect(accepted(rules.rate, "0.", "0..")).toBe("0.");
+    expect(accepted(rules.rate, "0.000000", "0.0000001")).toBe("0.000000");
+    expect(accepted(rules.rate, "0.00", "0.004")).toBe("0.004");
+    expect(accepted(rules.rate, "", "0..0-04x")).toBe("0.004"); // paste keeps the usable characters
+    expect(accepted(rules.capMinutes, "3", "3a")).toBe("3");
+    expect(accepted(rules.code, "12", "12 ")).toBe("12");
+    expect(accepted(rules.productName, "GP", "GP U")).toBe("GP U"); // text rules accept anything
   });
 });

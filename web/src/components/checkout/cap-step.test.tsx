@@ -68,8 +68,9 @@ describe("CapStep", () => {
     await user.type(input, "43201");
     expect(screen.getByText("Between 1 minute and 30 days.")).toBeInTheDocument();
     await user.clear(input);
-    await user.type(input, "1.5");
-    expect(screen.getByText("Enter whole minutes.")).toBeInTheDocument();
+    // FR-DSH-114 keystroke filter: the dot and the letter never land.
+    await user.type(input, "1.5x");
+    expect(input).toHaveValue("15");
     await user.clear(input);
     await user.type(input, "43200");
     await user.click(screen.getByRole("button", { name: /^continue$/i }));
