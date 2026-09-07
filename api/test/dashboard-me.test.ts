@@ -64,6 +64,23 @@ describe("FR-API-103 dashboard me", () => {
     expect(csrf.status).toBe(403);
   });
 
+  it("FR_API_103_support_url_is_http_or_https_only_and_blank_support_fields_clear_with_null", async () => {
+    const { cookie } = await signIn();
+    await dash(cookie, "POST", "/v1/dashboard/me", { name: "Acme" });
+    for (const bad of ["javascript:alert(1)", "ftp://acme.test", "acme.test/help"]) {
+      const r = await dash(cookie, "POST", "/v1/dashboard/me", { support_url: bad });
+      expect(r.status).toBe(400);
+      expect(r.body.error.param).toBe("support_url");
+    }
+    const b = await dash(cookie, "POST", "/v1/dashboard/me", { branding: { support_url: "javascript:alert(1)" } });
+    expect(b.status).toBe(400);
+    expect(b.body.error.param).toBe("branding.support_url");
+    const ok = await dash(cookie, "POST", "/v1/dashboard/me", { support_url: "http://acme.test/help", support_email: "help@acme.test" });
+    expect(ok.status).toBe(200);
+    const cleared = await dash(cookie, "POST", "/v1/dashboard/me", { support_url: null, support_email: null });
+    expect(cleared.body).toMatchObject({ support_url: null, support_email: null });
+  });
+
   it("FR_API_103_checklist_follows_the_current_mode", async () => {
     const { cookie } = await signIn();
     await dash(cookie, "POST", "/v1/dashboard/me", { name: "Acme" });

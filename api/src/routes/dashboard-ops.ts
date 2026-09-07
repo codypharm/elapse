@@ -5,6 +5,7 @@ import { getMerchantProfile } from "../db/merchant-profile";
 import { chainClient, RelayerUnavailable } from "../chain/relayer";
 import { escrowTokenFor } from "../chain/deployments";
 import { ApiError, invalid } from "../lib/errors";
+import { csvCell } from "../lib/csv";
 import { baseUnitsToDecimal } from "../lib/money";
 import { router } from "../lib/openapi";
 import { clientIp, sessionAuth, type AuthEnv } from "../middleware/auth";
@@ -73,8 +74,8 @@ dashboardOps.openapi(
     }));
     if (q.format === "csv") {
       const cols = ["id", "kind", "amount_usd", "subscription", "customer", "customer_email", "tx_hash", "log_index", "block_timestamp", "reversed_by"] as const;
-      const esc = (v: unknown) => (v === null || v === undefined ? "" : /[",\n]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v));
-      const csv = [cols.join(","), ...data.map((r) => cols.map((k) => esc(r[k])).join(","))].join("\n") + "\n";
+      // FR-API-113: amounts are the only signed column; everything else gets the formula guard.
+      const csv = [cols.join(","), ...data.map((r) => cols.map((k) => csvCell(r[k], { numeric: k === "amount_usd" })).join(","))].join("\n") + "\n";
       return c.body(csv, 200, { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="elapse-ledger-${auth.livemode ? "live" : "test"}.csv"` });
     }
     const summary: Record<string, string> = {};

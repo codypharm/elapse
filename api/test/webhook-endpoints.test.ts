@@ -92,6 +92,19 @@ describe("FR-API-062 url safety", () => {
   });
 });
 
+describe("FR-API-065 url length", () => {
+  test("FR_API_065_a_url_over_2048_characters_is_400_on_param_url_and_2048_is_accepted", async () => {
+    const base = "https://acme.test/";
+    const over = await api("POST", "/v1/webhook_endpoints", { key: f.skTest, body: { ...good, url: base + "x".repeat(2049 - base.length) } });
+    expect(over.status).toBe(400);
+    expect(over.body.error.param).toBe("url");
+    const exact = await api("POST", "/v1/webhook_endpoints", { key: f.skTest, body: { ...good, url: base + "x".repeat(2048 - base.length) } });
+    expect(exact.status).toBe(200);
+    const upd = await api("POST", `/v1/webhook_endpoints/${exact.body.id}`, { key: f.skTest, body: { url: base + "y".repeat(2049 - base.length) } });
+    expect(upd.status).toBe(400);
+  });
+});
+
 describe("FR-API-061 update, delete", () => {
   test("update url, events, disabled; audit row; other mode → 404", async () => {
     const wh = (await api("POST", "/v1/webhook_endpoints", { key: f.skTest, body: good })).body;

@@ -54,9 +54,11 @@ export const WebhookEndpointSchema = z
   })
   .openapi("WebhookEndpoint");
 
-const CreateBody = z.strictObject({ url: z.string(), events: EventsField }).openapi("CreateWebhookEndpoint");
+// FR-API-065: a bound on the URL; its shape and reachability are checked at runtime (FR-API-062).
+const UrlField = z.string().max(2048, "must be at most 2048 characters");
+const CreateBody = z.strictObject({ url: UrlField, events: EventsField }).openapi("CreateWebhookEndpoint");
 const UpdateBody = z
-  .strictObject({ url: z.string().optional(), events: EventsField.optional(), disabled: z.boolean().optional() })
+  .strictObject({ url: UrlField.optional(), events: EventsField.optional(), disabled: z.boolean().optional() })
   .refine((b) => Object.keys(b).length > 0, { message: "Provide at least one field to update." })
   .openapi("UpdateWebhookEndpoint");
 const RollBody = z

@@ -11,8 +11,10 @@ import { clientIp, sessionAuth, type AuthEnv } from "../middleware/auth";
  * first-run capture, later changes go through FR-API-106 with a re-typed confirmation.
  */
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+/** FR-API-103 (amended 2026-09-07): a support link is http(s) only, never another scheme. */
+const HttpUrl = z.string().max(2048).url().refine((u) => /^https?:\/\//i.test(u), "must start with http:// or https://");
 
-const ProfileSchema = z
+export const ProfileSchema = z
   .object({
     id: z.string(),
     object: z.literal("merchant"),
@@ -34,12 +36,12 @@ const UpdateBody = z
     name: z.string().trim().min(1).max(80).optional(),
     payout_address: z.string().regex(ADDRESS, "must be a 0x-prefixed 20-byte address").optional(),
     support_email: z.string().email().max(254).nullable().optional(),
-    support_url: z.string().url().max(2048).nullable().optional(),
+    support_url: HttpUrl.nullable().optional(),
     branding: z
       .strictObject({
         display_name: z.string().trim().max(80).nullable().optional(),
         accent: z.string().regex(/^#[0-9a-fA-F]{6}$/, "must be a #rrggbb colour").nullable().optional(),
-        support_url: z.string().url().max(2048).nullable().optional(),
+        support_url: HttpUrl.nullable().optional(),
       })
       .optional(),
     notifications: z.strictObject({ endpoint_exhausted_email: z.boolean().optional(), key_expiry_email: z.boolean().optional() }).optional(),
