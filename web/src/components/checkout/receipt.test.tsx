@@ -100,4 +100,11 @@ describe("Receipt", () => {
     await userEvent.setup().click(screen.getByRole("button", { name: /start again/i }));
     expect(onStartAgain).toHaveBeenCalledTimes(1);
   });
+
+  it("FR_CHK_007_a_restarted_receipt_shows_started_again_as_a_link_and_no_button", () => {
+    render(<Receipt {...props} receipt={receipt()} onStartAgain={vi.fn()} restartedAs="cs_new" />);
+    expect(screen.queryByRole("button", { name: /start again/i })).toBeNull();
+    const link = screen.getByRole("link", { name: /newer session followed/i });
+    expect(link).toHaveAttribute("href", "/c/cs_new");
+  });
 });

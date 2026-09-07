@@ -15,6 +15,7 @@ export interface WireAccountSubscription {
   status: "active" | "paused" | "canceled";
   livemode: boolean;
   checkout_session?: string | null;
+  restarted_as?: string | null;
   merchant: { name: string; logo_url: string | null; support_url: string | null };
   product: { name: string; rate_usd_per_second: string };
   started_at: number | null;
@@ -61,6 +62,7 @@ export function receiptFrom(w: WireAccountSubscription): AccountReceipt {
   return {
     subscription: w.id,
     ...(w.checkout_session ? { session: w.checkout_session as `cs_${string}` } : {}),
+    ...(w.restarted_as ? { restartedAs: w.restarted_as as `cs_${string}` } : {}),
     test: !w.livemode,
     merchant: merchantOf(w.merchant),
     product: { name: w.product.name, rateUsdPerSecond: w.product.rate_usd_per_second },

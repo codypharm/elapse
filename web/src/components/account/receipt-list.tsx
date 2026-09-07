@@ -119,7 +119,12 @@ export function ReceiptSheet({
               <dd className="numerals text-right">${r.refundedUsd}</dd>
             </dl>
 
-            {onStartAgain && (
+            {r.restartedAs && (
+              <a href={`/c/${r.restartedAs}`} className="mt-5 block py-1 text-center text-sm !text-ink-soft underline-offset-3 hover:!text-foreground">
+                A newer session followed this one · open it
+              </a>
+            )}
+            {onStartAgain && !r.restartedAs && (
               <Button size="lg" onClick={onStartAgain} disabled={startBusy} className="mt-5 h-12 w-full text-base">
                 <RotateCcw data-icon="inline-start" className="size-4" />
                 {startBusy ? "Opening…" : "Start again"}

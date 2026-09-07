@@ -172,6 +172,8 @@ describe("real CheckoutApi", () => {
     expect(calls[0]!.headers?.["x-privy-token"]).toBe("tok_fresh");
     expect(next.id).toBe("cs_new");
     expect(next.lastMaxDurationSeconds).toBe(3600);
+    responses = [wireSession({ restarted_as: "cs_new" })];
+    expect((await a.getSession("cs_abc")).restartedAs).toBe("cs_new");
     responses = [{ __status: 400, error: { type: "invalid_request_error", code: "product_archived", message: "This product is no longer available." } }];
     await expect(a.startAgain("cs_abc")).rejects.toMatchObject({ message: "This product is no longer available." });
   });

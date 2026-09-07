@@ -165,4 +165,17 @@ describe("AccountPage", () => {
     await vi.waitFor(() => expect(startAgain).toHaveBeenCalledWith("cs_old"));
     await vi.waitFor(() => expect(go).toHaveBeenCalledWith("http://localhost:3000/c/cs_new"));
   });
+
+  it("FR_CHK_020_a_restarted_account_receipt_links_to_the_newer_session_instead_of_the_button", async () => {
+    const user = userEvent.setup();
+    const api = createMockAccountApi({ latencyMs: 0, seed: "two-merchants", now: () => Date.now() });
+    const base = await api.getView();
+    if (base.status !== "signed_in") throw new Error("seed");
+    vi.spyOn(api, "getView").mockResolvedValue({ ...base, receipts: base.receipts.map((r) => ({ ...r, session: "cs_old" as const, restartedAs: "cs_new" as const })) });
+    render(<AccountPage api={api} />);
+    await user.click((await screen.findAllByRole("button", { name: /you paid/i }))[0]!);
+    const dialog = await screen.findByRole("dialog");
+    expect(within(dialog).queryByRole("button", { name: /start again/i })).toBeNull();
+    expect(within(dialog).getByRole("link", { name: /newer session followed/i })).toHaveAttribute("href", "/c/cs_new");
+  });
 });

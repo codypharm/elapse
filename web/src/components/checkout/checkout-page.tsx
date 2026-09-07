@@ -332,6 +332,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
           successHref={successHref}
           maxDurationSeconds={session.subscription?.maxDurationSeconds}
           onStartAgain={startAgain}
+          restartedAs={session.restartedAs}
           startBusy={busy}
           emailBusy={emailBusy}
           emailSentTo={emailSentTo}

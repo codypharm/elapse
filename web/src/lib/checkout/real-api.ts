@@ -40,6 +40,7 @@ type WireSession = {
   max_duration_seconds: number | null;
   max_escrow_usd: string | null;
   last_max_duration_seconds?: number | null;
+  restarted_as?: string | null;
 };
 type WireSubscription = {
   id: string;
@@ -98,6 +99,7 @@ export function mapSession(w: WireSession, local?: { signedIn: boolean }): Check
     customer,
     subscription: w.subscription ? mapSubscription(w.subscription) : null,
     ...(w.last_max_duration_seconds ? { lastMaxDurationSeconds: w.last_max_duration_seconds } : {}),
+    ...(w.restarted_as ? { restartedAs: w.restarted_as as `cs_${string}` } : {}),
     ...(local?.signedIn && !customer ? { signedIn: true } : {}),
   };
 }

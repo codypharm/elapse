@@ -38,6 +38,8 @@ export type AccountReceipt = {
   subscription: `sub_${string}`;
   /** The session it ran under, for Start again (FR-CHK-020, FR-API-126). */
   session?: `cs_${string}`;
+  /** Already started again: the newer session, linked instead of the button. */
+  restartedAs?: `cs_${string}`;
   test?: boolean;
   merchant: AccountMerchant;
   product: { name: string; rateUsdPerSecond: string };

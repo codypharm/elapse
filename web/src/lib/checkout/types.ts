@@ -71,6 +71,8 @@ export type CheckoutSession = {
   expiresAt: number;
   /** The cap chosen on the session this one was opened from with Start again (FR-CHK-007); the cap step preselects it. */
   lastMaxDurationSeconds?: number;
+  /** The newest session opened from this one with Start again (FR-CHK-007): the receipt links there instead of offering the button. */
+  restartedAs?: `cs_${string}`;
   /**
    * The subscriber has signed in on this device but no Customer exists yet:
    * the real API creates it at `prepare`, once a cap is chosen (FR-API-032).

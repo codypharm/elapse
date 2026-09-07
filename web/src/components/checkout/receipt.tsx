@@ -24,6 +24,7 @@ export function Receipt({
   maxDurationSeconds,
   onStartAgain,
   startBusy,
+  restartedAs,
   onEmail,
   emailBusy,
   emailSentTo,
@@ -36,6 +37,8 @@ export function Receipt({
   maxDurationSeconds?: number;
   onStartAgain?: () => void;
   startBusy?: boolean;
+  /** This receipt was already started again: link to the newer session, no button (FR-CHK-007). */
+  restartedAs?: `cs_${string}`;
   /** Absent = the email receipt is not offered (no email on the sign-in, FR-CHK-029). */
   onEmail?: () => void;
   emailBusy?: boolean;
@@ -78,7 +81,12 @@ export function Receipt({
       </div>
 
       <div className="mt-auto flex flex-col gap-2 pt-2">
-        {onStartAgain && (
+        {restartedAs && (
+          <a href={`/c/${restartedAs}`} className="py-1 text-center text-sm !text-ink-soft underline-offset-3 hover:!text-foreground">
+            A newer session followed this one · open it
+          </a>
+        )}
+        {onStartAgain && !restartedAs && (
           <Button
             size="lg"
             variant="outline"
