@@ -207,6 +207,26 @@ describe("real CheckoutApi", () => {
     expect(resumed.subscription).toMatchObject({ status: "active", pausedAt: null });
   });
 
+  it("FR_CHK_031_getBalance_reads_the_balance_route_with_the_identity_token_and_maps_the_shape", async () => {
+    const a = api();
+    responses = [{ balance_usd: "3.10", needs_funding: true, receive_address: "0xabc", token: "AUSD", network: "Monad testnet", chain_id: 10143 }];
+    const b = await a.getBalance("cs_abc");
+    expect(calls[0]).toMatchObject({ method: "GET", url: `${BASE}/v1/checkout/sessions/cs_abc/balance` });
+    expect(calls[0]!.headers?.["x-privy-token"]).toBe("tok_fresh");
+    expect(b).toEqual({ balanceUsd: "3.10", needsFunding: true, receiveAddress: "0xabc", token: "AUSD", network: "Monad testnet" });
+  });
+
+  it("FR_CHK_031_a_start_refused_for_funds_is_an_insufficient_funds_error_with_the_server_sentence", async () => {
+    const a = api();
+    await a.signIn("cs_abc", {});
+    responses = [
+      wireSession({ customer: { id: "cus_1", email: null }, subscription: wireSub({ max_duration_seconds: 3600 }) }),
+      { customer: "cus_1", subscription: "sub_1", chain_id: 10143, max_duration_seconds: 3600, max_escrow_usd: "14.4", permit: { domain: {}, types: { Permit: [] }, primaryType: "Permit", message: { owner: wallet.address, spender: "0xf", value: "14400000", nonce: "1", deadline: String(T0 + 700) } } },
+      { __status: 400, error: { type: "invalid_request_error", code: "insufficient_balance", message: "This meter needs $14.40 to start. Your balance is $3.10." } },
+    ];
+    await expect(a.start("cs_abc")).rejects.toMatchObject({ code: "insufficient_funds", message: "This meter needs $14.40 to start. Your balance is $3.10." });
+  });
+
   it("FR_CHK_030_a_pause_rate_limit_reads_as_too_many_changes", async () => {
     responses = [{ __status: 429, error: { type: "rate_limit_error", code: "rate_limited", message: "Too many changes. Try again in a bit." } }];
     await expect(api().pause("cs_abc")).rejects.toMatchObject({ code: "rate_limited", message: "Too many changes. Try again in a bit." });

@@ -176,6 +176,7 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       if (res.status === 403 && serverCode === "subscriber_mismatch") throw new CheckoutApiError("sign_in_required", "Sign in again.");
       if (res.status === 429 && serverCode === "receipt_already_sent") throw new CheckoutApiError("already_sent", "Already sent. Check your inbox.");
       if (res.status === 429) throw new CheckoutApiError("rate_limited", json?.error?.message ?? "Too many changes. Try again in a bit.");
+      if (res.status === 400 && serverCode === "insufficient_balance") throw new CheckoutApiError("insufficient_funds", json?.error?.message ?? "Add funds to start.");
       const code = res.status === 404 ? "not_found" : res.status === 400 && serverCode === "invalid_cap" ? "invalid_amount" : res.status >= 500 ? "network" : "invalid_state";
       throw new CheckoutApiError(code, json?.error?.message ?? "Something went wrong.");
     }
@@ -187,11 +188,11 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
    * fetched again and the call retried once, silently; a second 401 (or a 403 mismatch)
    * surfaces as `sign_in_required`, which the page answers with the sign-in sheet.
    */
-  async function bindingCall<T>(path: string, body: unknown): Promise<T> {
+  async function bindingCall<T>(path: string, body: unknown, method: "GET" | "POST" = "POST"): Promise<T> {
     const attempt = async () => {
       const token = (await o.identityToken?.()) ?? null;
       if (!token) throw new CheckoutApiError("sign_in_required", "Sign in again.");
-      return call<T>("POST", path, body, { "X-Privy-Token": token });
+      return call<T>(method, path, body, { "X-Privy-Token": token });
     };
     try {
       return await attempt();
@@ -256,6 +257,12 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       const signature = await w.signTypedData(prep.permit);
       await call("POST", `/v1/checkout/sessions/${id}/start`, { signature });
       return mapSession(await waitFor(id, (s) => s.subscription?.status === "active" || s.subscription?.status === "canceled"), local);
+    },
+
+    // FR-CHK-031: read before the cap step; polled while Add funds is open.
+    async getBalance(id) {
+      const w = await bindingCall<{ balance_usd: string; needs_funding: boolean; receive_address: string; token: string; network: string }>(`/v1/checkout/sessions/${id}/balance`, undefined, "GET");
+      return { balanceUsd: w.balance_usd, needsFunding: w.needs_funding, receiveAddress: w.receive_address, token: w.token, network: w.network };
     },
 
     // FR-CHK-030: pause and resume are relayed like cancel (contracts FR-CON-018); no money moves.

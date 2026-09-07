@@ -4,7 +4,7 @@
  * the real service, so swapping is a one-line change.
  *
  * Seeds one session per screen (FR-CHK-015) so any state is reachable by
- * URL: /c/cs_demo, /c/cs_ready, /c/cs_running, /c/cs_lowbal, /c/cs_capped,
+ * URL: /c/cs_demo, /c/cs_ready, /c/cs_short, /c/cs_running, /c/cs_lowbal, /c/cs_capped,
  * /c/cs_paused, /c/cs_done, /c/cs_expired, /c/cs_used, /c/cs_archived.
  *
  * Money rules mirror the contract: the cap is the pot, reaching it ends
@@ -20,7 +20,7 @@ import {
   elapsedMs as elapsedMsOf,
 } from "@/lib/meter/math";
 import { capEndsAt, formatReceiptUsd, maxEscrowNano, parseUsd, refundNano } from "./funding";
-import type { CheckoutSession, Customer, EndedReason, Subscription } from "./types";
+import type { CheckoutBalance, CheckoutSession, Customer, EndedReason, Subscription } from "./types";
 
 export type Receipt = {
   secondsElapsed: number;
@@ -78,7 +78,7 @@ export type JudgeData = {
 
 export class CheckoutApiError extends Error {
   constructor(
-    public code: "not_found" | "invalid_state" | "invalid_amount" | "network" | "sign_in_required" | "unconfigured" | "already_sent" | "rate_limited",
+    public code: "not_found" | "invalid_state" | "invalid_amount" | "network" | "sign_in_required" | "unconfigured" | "already_sent" | "rate_limited" | "insufficient_funds",
     message: string,
   ) {
     super(message);
@@ -90,6 +90,8 @@ export interface CheckoutApi {
   signIn(id: string, input: { email?: string }): Promise<CheckoutSession>;
   /** Authorise a cap in seconds. Escrow is rate × cap; it replaces any earlier choice. */
   setCap(id: string, seconds: number): Promise<CheckoutSession>;
+  /** The signed-in wallet's balance and whether it must be funded by the subscriber (FR-CHK-031). */
+  getBalance(id: string): Promise<CheckoutBalance>;
   start(id: string): Promise<CheckoutSession>;
   pause(id: string): Promise<CheckoutSession>;
   resume(id: string): Promise<CheckoutSession>;
@@ -105,6 +107,7 @@ export interface CheckoutApi {
 export const SEEDED_SESSION_IDS = [
   "cs_demo",
   "cs_ready",
+  "cs_short",
   "cs_running",
   "cs_lowbal",
   "cs_capped",
@@ -167,6 +170,8 @@ function seed(now: number): Record<string, CheckoutSession> {
   return {
     cs_demo: open("cs_demo"),
     cs_ready: open("cs_ready", { customer: CUSTOMER, subscription: sub({ ...CAP }) }),
+    // FR-CHK-031: a signed-in wallet holding $0.50 that fills up after 6 s (see `getBalance`).
+    cs_short: open("cs_short", { customer: CUSTOMER }),
     cs_running: open("cs_running", {
       customer: CUSTOMER,
       subscription: sub({ ...CAP, status: "active", startedAt: now - 83_000 }),
@@ -217,6 +222,13 @@ export function createMockCheckoutApi(
   const latency = opts.latencyMs ?? 350;
   const store = seed(now());
   const deliveries = new Map<string, Delivery[]>();
+  // FR-CHK-031: only cs_short is ever short; its wallet fills up 6 s after the mock was created.
+  const seededAt = now();
+  const SHORT_ADDRESS = "0x2f1e8c9a4b7d6e5f0a1b2c3d4e5f60718293a4b5";
+  const balanceOf = (id: string): { usd: string; short: boolean } => {
+    if (id !== "cs_short") return { usd: "250.00", short: false };
+    return now() - seededAt >= 6_000 ? { usd: "20.00", short: false } : { usd: "0.50", short: true };
+  };
   let evt = 0;
 
   const wait = () =>
@@ -303,11 +315,21 @@ export function createMockCheckoutApi(
       });
     },
 
+    async getBalance(id) {
+      await wait();
+      get(id);
+      const b = balanceOf(id);
+      return { balanceUsd: b.usd, needsFunding: id === "cs_short", receiveAddress: SHORT_ADDRESS, token: "AUSD", network: "Monad testnet" };
+    },
+
     async start(id) {
       await wait();
       const s = get(id);
       if (!s.subscription || parseUsd(s.subscription.fundedUsd) <= 0n) {
         throw new CheckoutApiError("invalid_state", "Choose how long the meter may run first");
+      }
+      if (balanceOf(id).short) {
+        throw new CheckoutApiError("insufficient_funds", `This meter needs $${s.subscription.fundedUsd} to start. Your balance is $${balanceOf(id).usd}.`);
       }
       if (s.subscription.status !== "incomplete") {
         throw new CheckoutApiError("invalid_state", "Already started");

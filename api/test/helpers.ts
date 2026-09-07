@@ -16,6 +16,7 @@ export interface Fixture {
   skTest: string;
   skLive: string;
   pkTest: string;
+  pkLive: string;
   /** Where streams pay this merchant; a fixed test address. */
   payoutAddress: string;
 }
@@ -28,8 +29,9 @@ export async function seedMerchant(email = `m-${Math.random().toString(36).slice
   const skTest = await createApiKey({ merchantId: merchant.id, kind: "sk", livemode: false, name: "default", actor: "test" });
   const skLive = await createApiKey({ merchantId: merchant.id, kind: "sk", livemode: true, name: "default", actor: "test" });
   const pkTest = await createApiKey({ merchantId: merchant.id, kind: "pk", livemode: false, name: "default", actor: "test" });
+  const pkLive = await createApiKey({ merchantId: merchant.id, kind: "pk", livemode: true, name: "default", actor: "test" });
   await setPayoutAddress(merchant.id, TEST_PAYOUT_ADDRESS);
-  return { merchantId: merchant.id, skTest: skTest.plaintext, skLive: skLive.plaintext, pkTest: pkTest.plaintext, payoutAddress: TEST_PAYOUT_ADDRESS };
+  return { merchantId: merchant.id, skTest: skTest.plaintext, skLive: skLive.plaintext, pkTest: pkTest.plaintext, pkLive: pkLive.plaintext, payoutAddress: TEST_PAYOUT_ADDRESS };
 }
 
 /** JSON request against the in-process app; no port, no network. */

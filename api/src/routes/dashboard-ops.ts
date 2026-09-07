@@ -107,7 +107,7 @@ dashboardOps.openapi(
     const chainId = auth.livemode ? config.chains.live : config.chains.test;
     let balance = 0n;
     try {
-      balance = await chainClient().readBalance(chainId, escrowTokenFor(chainId), m.payout_address as `0x${string}`);
+      balance = await chainClient().readBalance(chainId, escrowTokenFor(chainId, auth.livemode), m.payout_address as `0x${string}`);
     } catch (e) {
       if (!(e instanceof RelayerUnavailable)) throw e;
     }

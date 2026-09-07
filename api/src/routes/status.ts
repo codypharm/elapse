@@ -1,7 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { config } from "../config";
 import { sql } from "../db/client";
-import { deploymentFor } from "../chain/deployments";
+import { escrowTokenFor, deploymentFor } from "../chain/deployments";
 import { indexerReader } from "../lib/indexer";
 import { router } from "../lib/openapi";
 import { workerHealth } from "../worker/heartbeat";
@@ -17,7 +17,7 @@ export const StatusSchema = z
   .object({
     chain_id: z.number().int(),
     block_time_ms: z.number().int(),
-    contracts: z.object({ factory: z.string(), token: z.string() }),
+    contracts: z.object({ factory: z.string(), token: z.string().openapi({ description: "Escrow token in test mode." }), live_token: z.string().openapi({ description: "Escrow token in live mode (AUSD)." }) }),
     indexer: z.object({
       ok: z.boolean(),
       latest_block: z.number().int().nullable(),
@@ -77,7 +77,7 @@ status.openapi(
       {
         chain_id: chainId,
         block_time_ms: MONAD_BLOCK_TIME_MS,
-        contracts: { factory: d.factory.toLowerCase(), token: (chainId === 143 ? d.ausd : d.mockUsd).toLowerCase() },
+        contracts: { factory: d.factory.toLowerCase(), token: escrowTokenFor(chainId, false).toLowerCase(), live_token: escrowTokenFor(chainId, true).toLowerCase() },
         indexer,
         worker: {
           alive: health.alive,

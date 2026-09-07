@@ -24,6 +24,7 @@ describe("mock checkout api", () => {
     const expected: Record<string, string> = {
       cs_demo: "signin",
       cs_ready: "ready",
+      cs_short: "cap",
       cs_running: "running",
       cs_lowbal: "low_balance",
       cs_capped: "canceled",
@@ -38,6 +39,18 @@ describe("mock checkout api", () => {
       const s = await api.getSession(id);
       expect(deriveView(s, now), id).toBe(view);
     }
+  });
+
+  it("FR_CHK_031_cs_short_holds_fifty_cents_that_become_twenty_dollars_after_six_seconds_and_start_is_refused_meanwhile", async () => {
+    const first = await api.getBalance("cs_short");
+    expect(first).toMatchObject({ balanceUsd: "0.50", needsFunding: true, token: "AUSD", network: "Monad testnet" });
+    expect(first.receiveAddress).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    await api.setCap("cs_short", 3600);
+    await expect(api.start("cs_short")).rejects.toMatchObject({ code: "insufficient_funds" });
+    now += 6_500;
+    expect((await api.getBalance("cs_short")).balanceUsd).toBe("20.00");
+    // Every other seeded session is funded and never needs funding.
+    expect(await api.getBalance("cs_ready")).toMatchObject({ needsFunding: false });
   });
 
   it("unknown session rejects with a not_found error", async () => {

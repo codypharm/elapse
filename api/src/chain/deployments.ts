@@ -22,10 +22,15 @@ export function deploymentFor(chainId: number): Deployment {
   return d;
 }
 
-/** Test mode (10143) escrows MockUSD; live (143) escrows AUSD (Undecided 4, decided 2026-09-05). */
-export function escrowTokenFor(chainId: number): Address {
+/**
+ * The token a mode escrows on a chain: live mode escrows AUSD, test mode MockUSD, on whichever
+ * chain the mode runs (ADR 2026-09-07 add money: both modes on 10143 until mainnet, live on
+ * AUSD there too). Mainnet has no MockUSD, so it is AUSD in both modes.
+ */
+export function escrowTokenFor(chainId: number, livemode: boolean): Address {
   const d = deploymentFor(chainId);
-  return chainId === 143 ? d.ausd : d.mockUsd;
+  if (chainId === 143) return d.ausd;
+  return livemode ? d.ausd : d.mockUsd;
 }
 
 /** Whether the relayer may mint the escrow token to a short wallet: true only for MockUSD (FR-API-032/034). Keyed by token, not mode: live mode runs on 10143 until a mainnet record exists (ADR 2026-09-07 testnet submission). */

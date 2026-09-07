@@ -4,7 +4,10 @@
  * it can cost, which is the ceiling they authorise and the contract
  * enforces. There is no adding funds later: the cap is the session.
  *
- * Maps to: FR-CHK-003; BR-CHK-001, BR-CHK-002.
+ * A wallet that cannot afford the smallest preset is offered Add funds instead of
+ * Continue (FR-CHK-031).
+ *
+ * Maps to: FR-CHK-003, FR-CHK-031; BR-CHK-001, BR-CHK-002.
  */
 "use client";
 
@@ -29,6 +32,7 @@ export function CapStep({
   initialSeconds,
   busy,
   onChoose,
+  onAddMoney,
 }: {
   rateUsdPerSecond: string;
   /** What the subscriber can spend, USD decimal string. Omit when unknown. */
@@ -38,6 +42,8 @@ export function CapStep({
   busy?: boolean;
   /** Called with the chosen cap in seconds. */
   onChoose: (seconds: number) => void;
+  /** Offered, with the smallest preset, when the wallet cannot afford any preset (FR-CHK-031). */
+  onAddMoney?: (seconds: number) => void;
 }) {
   const rate = useMemo(() => parseRate(rateUsdPerSecond), [rateUsdPerSecond]);
   const available = useMemo(
@@ -46,6 +52,7 @@ export function CapStep({
   );
   const affordable = (seconds: number) =>
     available === null || maxEscrowNano(seconds, rate) <= available;
+  const shortOfEverything = available !== null && !CAP_PRESETS_SECONDS.some(affordable);
 
   const preset = initialSeconds !== undefined && (CAP_PRESETS_SECONDS as readonly number[]).includes(initialSeconds) ? initialSeconds : null;
   const [choice, setChoice] = useState<number | "custom">(
@@ -151,14 +158,20 @@ export function CapStep({
         </p>
       )}
 
-      <Button
-        size="lg"
-        disabled={busy || seconds === null}
-        onClick={() => seconds !== null && onChoose(seconds)}
-        className="mt-auto h-12 w-full text-base"
-      >
-        {busy ? "One moment…" : seconds === null ? "Enter how long" : "Continue"}
-      </Button>
+      {shortOfEverything && onAddMoney ? (
+        <Button size="lg" disabled={busy} onClick={() => onAddMoney(CAP_PRESETS_SECONDS[0])} className="mt-auto h-12 w-full text-base">
+          Add funds
+        </Button>
+      ) : (
+        <Button
+          size="lg"
+          disabled={busy || seconds === null}
+          onClick={() => seconds !== null && onChoose(seconds)}
+          className="mt-auto h-12 w-full text-base"
+        >
+          {busy ? "One moment…" : seconds === null ? "Enter how long" : "Continue"}
+        </Button>
+      )}
     </section>
   );
 }

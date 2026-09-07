@@ -95,3 +95,21 @@ describe("CapStep", () => {
     expect(screen.getByRole("radio", { name: /1 hour/i })).not.toBeDisabled();
   });
 });
+
+describe("CapStep with a short wallet (FR-CHK-031)", () => {
+  it("FR_CHK_031_when_no_preset_is_affordable_Continue_becomes_Add_money_for_the_smallest_preset", async () => {
+    const user = userEvent.setup();
+    const onAddMoney = vi.fn();
+    render(<CapStep rateUsdPerSecond="0.004" availableUsd="0.50" onChoose={vi.fn()} onAddMoney={onAddMoney} />);
+    expect(screen.getByText(/you have \$0\.50 available/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^continue$/i })).toBeNull();
+    await user.click(screen.getByRole("button", { name: /add funds/i }));
+    expect(onAddMoney).toHaveBeenCalledWith(3600);
+  });
+
+  it("FR_CHK_031_an_affordable_preset_keeps_Continue", () => {
+    render(<CapStep rateUsdPerSecond="0.004" availableUsd="20" onChoose={vi.fn()} onAddMoney={vi.fn()} />);
+    expect(screen.getByRole("button", { name: /^continue$/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /add funds/i })).toBeNull();
+  });
+});

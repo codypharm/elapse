@@ -26,12 +26,13 @@ import {
   type JudgeData,
   type Receipt as ReceiptData,
 } from "@/lib/checkout/mock-api";
-import type { CheckoutSession, CheckoutView } from "@/lib/checkout/types";
+import type { CheckoutBalance, CheckoutSession, CheckoutView } from "@/lib/checkout/types";
 import { actionGate, afterError, deriveView } from "@/lib/checkout/view";
 import { formatUsd, parseRate } from "@/lib/meter/math";
-import { capEndsAt, formatCap, parseUsd } from "@/lib/checkout/funding";
+import { capEndsAt, formatCap, maxEscrowNano, parseUsd } from "@/lib/checkout/funding";
 import { CheckoutFrame } from "./checkout-frame";
 import { FaceIdSheet, type AuthResult } from "./face-id-sheet";
+import { AddMoneyStep } from "./add-money-step";
 import { CapStep } from "./cap-step";
 import { JudgePanel } from "./judge-panel";
 import { MeterView } from "./meter-view";
@@ -58,6 +59,10 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
   const [emailBusy, setEmailBusy] = useState(false);
   const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
+  // FR-CHK-031: what the signed-in wallet holds, read once the cap step is reachable; null = unknown.
+  const [balance, setBalance] = useState<CheckoutBalance | null>(null);
+  // The escrow the subscriber is adding money for; null = the Add funds step is closed.
+  const [addingFor, setAddingFor] = useState<string | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [judgeOpen, setJudgeOpen] = useState(params.get("judge") === "1");
   const [judge, setJudge] = useState<JudgeData | null>(null);
@@ -99,6 +104,26 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
     api.getJudgeData(sessionId).then(setJudge).catch(() => setJudge(null));
   }, [judgeOpen, api, sessionId, now]);
 
+  // FR-CHK-031: read the balance once the subscriber is signed in and the wallet is usable.
+  const capReachable = load.status === "ready" && !!(load.session.customer || load.session.signedIn) && (!real || (flow.signedInAlready ?? false) || (load.session.signedIn ?? false));
+  useEffect(() => {
+    if (!capReachable || balance !== null) return;
+    let alive = true;
+    api
+      .getBalance(sessionId)
+      .then((b) => alive && setBalance(b))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [capReachable, balance, api, sessionId]);
+  const refreshBalance = useCallback(() => api.getBalance(sessionId), [api, sessionId]);
+  const onFunded = useCallback((b: CheckoutBalance) => {
+    setBalance(b);
+    setAddingFor(null);
+    toast.success("Funds arrived");
+  }, []);
+
   const run = useCallback(
     async (fn: () => Promise<CheckoutSession>) => {
       setBusy(true);
@@ -106,6 +131,10 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         const session = await fn();
         setLoad({ status: "ready", session });
       } catch (e) {
+        if (e instanceof CheckoutApiError && e.code === "insufficient_funds") {
+          api.getBalance(sessionId).then(setBalance).catch(() => {});
+          return;
+        }
         const next = afterError(e);
         toast.error(next.message);
         if (next.openSignIn) setAuthOpen(true);
@@ -113,7 +142,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         setBusy(false);
       }
     },
-    [],
+    [api, sessionId],
   );
 
   const onAuthenticated = useCallback(
@@ -252,19 +281,29 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {view === "cap" && gate === "ok" && (
+      {(view === "cap" || view === "ready") && gate === "ok" && addingFor !== null && balance && (
+        <AddMoneyStep neededUsd={addingFor} initial={balance} refresh={refreshBalance} onFunded={onFunded} cancelHref={session.merchant.cancelUrl} />
+      )}
+
+      {view === "cap" && gate === "ok" && addingFor === null && (
         <div className="flex flex-1 flex-col gap-5">
           <RatePanel product={session.product} />
           <CapStep
             rateUsdPerSecond={session.product.rateUsdPerSecond}
+            availableUsd={balance?.needsFunding ? balance.balanceUsd : undefined}
             initialSeconds={session.lastMaxDurationSeconds}
             busy={busy}
             onChoose={(seconds) => run(() => api.setCap(sessionId, seconds))}
+            onAddMoney={(seconds) => setAddingFor(formatUsd(maxEscrowNano(seconds, parseRate(session.product.rateUsdPerSecond)), 3, { symbol: false }))}
           />
         </div>
       )}
 
-      {view === "ready" && gate === "ok" && session.subscription && (
+      {view === "ready" && gate === "ok" && session.subscription && addingFor === null && balance?.needsFunding && parseUsd(balance.balanceUsd) < parseUsd(session.subscription.fundedUsd) && (
+        <AddMoneyStep neededUsd={session.subscription.fundedUsd} initial={balance} refresh={refreshBalance} onFunded={onFunded} cancelHref={session.merchant.cancelUrl} />
+      )}
+
+      {view === "ready" && gate === "ok" && session.subscription && addingFor === null && !(balance?.needsFunding && parseUsd(balance.balanceUsd) < parseUsd(session.subscription.fundedUsd)) && (
         <div className="flex flex-1 flex-col gap-4">
           <RatePanel product={session.product} />
           <div className="rounded-xl border border-border bg-card px-5 py-4 text-sm">

@@ -116,7 +116,7 @@ export async function prepareSession(input: {
     return sub;
   });
 
-  const token = escrowTokenFor(chainId);
+  const token = escrowTokenFor(chainId, session.livemode);
   const chain = chainClient();
   const [domain, nonce] = await Promise.all([chain.readPermitDomain(chainId, token), chain.readNonce(chainId, token, wallet)]);
   const deadline = BigInt(now + PERMIT_TTL_SECONDS);
@@ -156,7 +156,7 @@ export async function startSession(input: { session: CheckoutSessionRow; signatu
   if (!payout) throw new CheckoutStateError("no_payout_address", "The merchant has not set a payout address.");
 
   const chainId = sub.chain_id;
-  const token = escrowTokenFor(chainId);
+  const token = escrowTokenFor(chainId, sub.livemode);
   const maxEscrow = BigInt(sub.max_escrow_wei);
   const chain = chainClient();
   const domain = await chain.readPermitDomain(chainId, token);
@@ -291,6 +291,27 @@ export async function cancelAsKeeper(sub: SubscriptionRow): Promise<Hex> {
   const pendingTx = await chainClient().cancel(sub.chain_id, sub.stream_address as Address);
   await sql`UPDATE subscriptions SET updated_at = now() WHERE id = ${sub.id}`;
   return pendingTx;
+}
+
+/**
+ * FR-API-048: what the checkout needs to know before the cap step — the wallet's balance of
+ * this session's escrow token, and whether a short wallet can be topped up by us (MockUSD)
+ * or must be funded by the subscriber (AUSD). Names for the one screen that may say them.
+ */
+export async function readCheckoutBalance(input: { session: CheckoutSessionRow; walletAddress: string }) {
+  const chainId = input.session.livemode ? config.chains.live : config.chains.test;
+  const token = escrowTokenFor(chainId, input.session.livemode);
+  const wallet = input.walletAddress.toLowerCase() as Address;
+  const balance = await chainClient().readBalance(chainId, token, wallet);
+  const mintable = isMintable(chainId, token);
+  return {
+    balance_usd: usd(balance),
+    needs_funding: !mintable,
+    receive_address: wallet,
+    token: mintable ? "Test dollars" : "AUSD",
+    network: chainId === 143 ? "Monad" : "Monad testnet",
+    chain_id: chainId,
+  };
 }
 
 /** Token base units → "14.40": two decimals for a sentence a subscriber reads (FR-API-034). */

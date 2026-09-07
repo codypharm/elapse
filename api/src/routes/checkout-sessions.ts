@@ -10,7 +10,7 @@ import { findCustomer } from "../db/customers";
 import { sql } from "../db/client";
 import { RelayerUnavailable } from "../chain/relayer";
 import { SubscriberAuthError, SubscriberAuthUnconfigured, verifyIdentityToken, type SubscriberIdentity } from "../lib/privy";
-import { CheckoutStateError, prepareSession, startSession, prepareCancel, cancelSubscription, prepareRelay, submitRelay, PERMIT_TTL_SECONDS, CANCEL_TTL_SECONDS } from "../services/checkout";
+import { CheckoutStateError, prepareSession, startSession, prepareCancel, cancelSubscription, prepareRelay, submitRelay, readCheckoutBalance, PERMIT_TTL_SECONDS, CANCEL_TTL_SECONDS } from "../services/checkout";
 import { PERMIT_TYPES } from "../chain/permit";
 import { baseUnitsToDecimal } from "../lib/money";
 import { PUBLIC, router } from "../lib/openapi";
@@ -460,6 +460,38 @@ checkoutSessions.openapi(
     } catch (e) {
       mapCheckoutError(e);
     }
+  },
+);
+
+// ─── Wallet balance before the cap step (FR-API-048, ADR 2026-09-07 add money) ─────────────────
+
+const BalanceResponse = z
+  .object({
+    balance_usd: z.string(),
+    needs_funding: z.boolean().openapi({ description: "True when the wallet must be funded by the subscriber (AUSD); false when the platform tops up test dollars." }),
+    receive_address: z.string(),
+    token: z.string(),
+    network: z.string(),
+    chain_id: z.number().int(),
+  })
+  .openapi("CheckoutBalance");
+
+checkoutSessions.openapi(
+  createRoute({
+    method: "get",
+    path: "/checkout/sessions/{id}/balance",
+    operationId: "checkout.sessions.balance",
+    tags: ["Checkout"],
+    hide: true,
+    middleware: [requireAuth({ keys: ["pk"], session: false, checkout: true })] as const,
+    request: { params: z.object({ id: z.string() }) },
+    responses: { 200: { description: "The signed-in wallet's balance of this session's escrow token.", content: { "application/json": { schema: BalanceResponse } } } },
+  }),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const session = await loadSession(c.get("auth"), id);
+    const who = await subscriberIdentity(c);
+    return c.json(await readCheckoutBalance({ session, walletAddress: who.walletAddress }), 200);
   },
 );
 

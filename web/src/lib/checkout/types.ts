@@ -92,3 +92,17 @@ export type CheckoutView =
   | "low_balance"
   | "paused"
   | "canceled";
+
+/**
+ * What the checkout knows about the signed-in wallet before the cap step (FR-CHK-031). Only
+ * `token` and `network` are ever shown, and only on the Add funds step.
+ */
+export type CheckoutBalance = {
+  /** USD decimal string. */
+  balanceUsd: string;
+  /** True when the subscriber must fund the wallet themselves (AUSD); false when test dollars are topped up for them. */
+  needsFunding: boolean;
+  receiveAddress: string;
+  token: string;
+  network: string;
+};
