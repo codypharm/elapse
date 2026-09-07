@@ -4,9 +4,9 @@
   "name": "Elapse",
   "description": "Per-second billing for APIs, GPU time, streams and seats. You only pay what elapsed.",
   "colors": {
-    "primary": "#171717",
-    "light": "#ededed",
-    "dark": "#0a0a0a"
+    "primary": "#b45309",
+    "light": "#f5b74a",
+    "dark": "#92400e"
   },
   "logo": {
     "light": "/logo/light.svg",

@@ -155,7 +155,7 @@ When in doubt: **deny by default, log the denial, surface to human if ambiguous.
 
 ### Copy
 
-- Subscriber side: "You paid 83 seconds · $0.33". Never "transaction confirmed on-chain".
+- Subscriber side: "You paid for 83 seconds · $0.33" (William, 2026-09-07: "for" added; the landing hook "Pay 83 seconds" stays blunt on purpose). Never "transaction confirmed on-chain".
 - Merchant side: Stripe vocabulary. Chain detail understated (short tx id + external link).
 
 ### Components

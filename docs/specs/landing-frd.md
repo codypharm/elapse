@@ -18,7 +18,7 @@ A merchant engineer, or a judge, arrives with no context and must understand per
 | Id | Requirement | Status |
 | --- | --- | --- |
 | FR-LND-001 | The demo meter starts automatically ~1 s after load at the demo rate; the strip's pen drops. | Built |
-| FR-LND-002 | Pressing Cancel lifts the pen, locks the readout, and shows "You paid N seconds · $X" with the settled (whole-second) amount. | Built |
+| FR-LND-002 | Pressing Cancel lifts the pen, locks the readout, and shows "You paid for N seconds · $X" with the settled (whole-second) amount. | Built |
 | FR-LND-003 | The `subscription.canceled` webhook card is visible at rest with the canonical example (83 s / $0.33, labelled example) and swaps to the visitor's numbers on cancel. | Built |
 | FR-LND-004 | "Start again" opens a new session; the strip keeps the gap. | Built |
 | FR-LND-005 | The install row copies `npm install @elapse/sdk` on click and confirms for 1.6 s. | Built |

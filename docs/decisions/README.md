@@ -43,3 +43,4 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [The 13 October submission runs on Monad testnet; live mode points at testnet too; the relayer gets its own wallet now](./2026-09-07-submission-on-testnet-live-mode-mockusd.md) | William |
 | 2026-09-07 | [The submission ships `@elapse/sdk` (TypeScript) only; the Python package waits](./2026-09-07-sdk-typescript-only-for-submission.md) | William |
 | 2026-09-07 | [Forms hardening: rate read-only on edit, PNG-only logo in Postgres, type-to-confirm on live key revoke](./2026-09-07-forms-hardening-logo-png-revoke-confirm.md) | William |
+| 2026-09-07 | [`/account` reads real data: both modes with a Test tag, receipts from canceled subscriptions, email receipt built, seeded mock gone from the route](./2026-09-07-account-page-on-real-data.md) | William |

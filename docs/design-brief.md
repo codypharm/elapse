@@ -18,7 +18,7 @@ Audience: (1) developers/merchants who already know Stripe; (2) their end custom
 - **Typography:** one clean sans plus a mono for numbers, ids, and code.
 - **Color:** near-white and near-black neutrals, one restrained accent, semantic green/amber/red for status. Full light and dark mode.
 - **Density:** dashboard is compact and table-heavy like Stripe; checkout is spacious and mobile-first.
-- **Copy tone:** short, plain, confident. "You paid 83 seconds · $0.33". Never "Transaction confirmed on-chain".
+- **Copy tone:** short, plain, confident. "You paid for 83 seconds · $0.33". Never "Transaction confirmed on-chain".
 - **Motion:** purposeful and orchestrated — landing reveals, meter start/stop, drawers, toasts. The meter ticks; the UI never blinks or pulses per second. Respect reduced-motion.
 - Deliver desktop 1440 and mobile 390 for every page; light + dark for checkout and dashboard shell.
 
@@ -33,7 +33,7 @@ Audience: (1) developers/merchants who already know Stripe; (2) their end custom
 
 Single page, marketing, developer-facing.
 
-1. **Hero:** "You only pay what elapsed." Sub: per-second subscriptions for APIs, GPUs, streams, SaaS. CTAs: "Read the docs" (primary), "Open dashboard". Right side: a live ticking meter demo (rate $0.004/s) with a Cancel button that stops it and shows "You paid 83 s · $0.33".
+1. **Hero:** "You only pay what elapsed." Sub: per-second subscriptions for APIs, GPUs, streams, SaaS. CTAs: "Read the docs" (primary), "Open dashboard". Right side: a live ticking meter demo (rate $0.004/s) with a Cancel button that stops it and shows "You paid for 83 s · $0.33".
 2. **Install strip:** `npm install @elapse/sdk` with copy button, three-line code sample.
 3. **How it works — three steps:** Create a product → Send customer to Checkout → Receive `subscription.canceled` with `seconds_elapsed`.
 4. **Problem/solution split:** "Cancel on day 3, pay for 30. The meter is a lie." vs the per-second meter.
@@ -62,7 +62,7 @@ Single page, marketing, developer-facing.
 - Out-of-funds (red): meter paused, "Add funds to resume"
 
 **2.3 Canceled / receipt**
-- "You paid 83 seconds · $0.33" as hero line
+- "You paid for 83 seconds · $0.33" as hero line
 - Breakdown: started, canceled, rate, total, refunded unused funds
 - "Back to {merchant}" (success_url) and "Email receipt"
 
