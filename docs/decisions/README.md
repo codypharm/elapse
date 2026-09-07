@@ -44,3 +44,4 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [The submission ships `@elapse/sdk` (TypeScript) only; the Python package waits](./2026-09-07-sdk-typescript-only-for-submission.md) | William |
 | 2026-09-07 | [Forms hardening: rate read-only on edit, PNG-only logo in Postgres, type-to-confirm on live key revoke](./2026-09-07-forms-hardening-logo-png-revoke-confirm.md) | William |
 | 2026-09-07 | [`/account` reads real data: both modes with a Test tag, receipts from canceled subscriptions, email receipt built, seeded mock gone from the route](./2026-09-07-account-page-on-real-data.md) | William |
+| 2026-09-07 | [Start again is offered on every receipt and opens a copy of the ended session on the merchant's behalf](./2026-09-07-start-again-after-any-end.md) | William |
