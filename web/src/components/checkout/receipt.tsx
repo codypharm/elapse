@@ -116,7 +116,7 @@ export function Receipt({
         )}
         <a
           href="/account"
-          className="py-1 text-center text-xs !text-ink-soft underline-offset-3 hover:!text-foreground"
+          className="flex min-h-11 items-center justify-center text-center text-xs !text-ink-soft underline-offset-3 hover:!text-foreground"
         >
           Manage your meters
         </a>

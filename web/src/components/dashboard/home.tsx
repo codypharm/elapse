@@ -17,6 +17,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CodeBlock } from "@/components/site/code-block";
 import { timeAgo } from "@/lib/dashboard/format";
+import { parseUsd } from "@/lib/checkout/funding";
+import { formatUsd } from "@/lib/meter/math";
 import { useMode } from "@/lib/dashboard/mode";
 import type { ChecklistState, Event, Overview, Subscription } from "@/lib/dashboard/types";
 import { usePoll } from "@/lib/dashboard/use-poll";
@@ -185,8 +187,9 @@ function Checklist({ state, merchantName }: { state: ChecklistState; merchantNam
 function StatStrip({ overview }: { overview: Overview }) {
   const cells = [
     { label: "Running now", value: String(overview.runningNow), unit: overview.runningNow === 1 ? "meter" : "meters", live: overview.runningNow > 0 },
-    { label: "Accrued today", value: `$${overview.accruedTodayUsd}`, unit: "so far" },
-    { label: "Settled this week", value: `$${overview.settledWeekNetUsd}`, unit: "net of fee" },
+    // Headline figures floor to three decimals like the invoice totals; the rows keep the exact amounts.
+    { label: "Accrued today", value: formatUsd(parseUsd(overview.accruedTodayUsd), 3), unit: "so far" },
+    { label: "Settled this week", value: formatUsd(parseUsd(overview.settledWeekNetUsd), 3), unit: "net of fee" },
     { label: "Failed payments", value: String(overview.failedPaymentsWeek), unit: "this week" },
   ];
   return (
@@ -277,7 +280,7 @@ function RecentEvents({ events }: { events: Event[] }) {
                 className="flex min-h-12 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/60"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="numerals truncate text-[13px]">{e.type}</p>
+                  <p className="numerals break-all text-[13px] leading-tight">{e.type}</p>
                   <p className="numerals truncate text-[12px] text-ink-soft">{e.objectId}</p>
                 </div>
                 <span

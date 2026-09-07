@@ -219,7 +219,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
             )}
             <a
               href={session.merchant.cancelUrl}
-              className="py-2 text-center text-sm !text-ink-soft !no-underline hover:!text-foreground"
+              className="flex min-h-11 items-center justify-center text-center text-sm !text-ink-soft !no-underline hover:!text-foreground"
             >
               Not now
             </a>

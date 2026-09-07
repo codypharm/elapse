@@ -391,9 +391,12 @@ export function createMockCheckoutApi(
     async startAgain(id) {
       await wait();
       const s = get(id);
+      // The follow-on lands on the seeded "ready" session: the route keeps only seeded ids on the
+      // mock (FR-CHK-015), and a page load resets this in-memory state, so an invented id would
+      // fall through to the real API and 404.
       const next: CheckoutSession = {
         ...s,
-        id: `cs_${Math.random().toString(36).slice(2, 9)}`,
+        id: "cs_ready",
         status: "open",
         subscription: null,
         expiresAt: now() + 24 * 3_600_000,

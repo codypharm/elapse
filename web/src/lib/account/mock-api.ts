@@ -239,9 +239,11 @@ export function createMockAccountApi(
       return view();
     },
 
-    async startAgain(session) {
+    async startAgain() {
       await wait();
-      return { url: `/c/${session}` };
+      // Seeded receipts name sessions that exist only here; the seeded "ready" checkout is the
+      // one follow-on that survives the page load (see the checkout mock).
+      return { url: "/c/cs_ready" };
     },
 
     async emailReceipt(subscription) {

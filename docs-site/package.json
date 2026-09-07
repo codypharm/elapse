@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "mintlify dev --port 3333",
     "sync-snippets": "tsx scripts/sync-snippets.ts",
-    "check": "tsx scripts/sync-snippets.ts --check && tsx ci/surface-check.ts && mintlify broken-links",
+    "check": "tsx scripts/sync-snippets.ts --check && tsx ci/surface-check.ts && cd site && mintlify validate && mintlify broken-links",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

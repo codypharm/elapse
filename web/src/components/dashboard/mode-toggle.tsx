@@ -24,7 +24,8 @@ export function ModeToggle({ className }: { className?: string }) {
       role="radiogroup"
       aria-label="Data mode"
       className={cn(
-        "inline-flex h-8 items-center rounded-lg border border-border bg-background p-0.5",
+        // 44 px tall on a phone (touch target), the compact 32 px once a pointer is likely.
+        "inline-flex h-11 items-center rounded-lg border border-border bg-background p-0.5 md:h-8",
         className,
       )}
     >

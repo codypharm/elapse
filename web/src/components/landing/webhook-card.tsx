@@ -32,8 +32,8 @@ export function buildCanceledEvent({
       "id": "sub_1S2xq6Hf9",
       "status": "canceled",
       "seconds_elapsed": ${secondsElapsed},
-      "amount_settled": "${amountSettled}",
-      "currency": "usd",
+      "settled_usd": "${amountSettled}",
+      "currency": "ausd",
       "product": "prod_gpu4090",
       "customer": "cus_7Qw2m"
     }

@@ -67,7 +67,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
     <Tabs>
       <Tab title="TypeScript">
         <ExampleSession />
-        Send the subscriber to `session.url`. When they cancel, Elapse returns them to `success_url` with `?session_id=cs_…` appended.
+        Send the subscriber to `session.url`. When they stop, Elapse returns them to `success_url` with `?session_id=cs_…` appended.
       </Tab>
       <Tab title="cURL">
         ```bash
@@ -110,8 +110,8 @@ Every snippet on this page is extracted from the finished merchant in [`examples
     <CliListen />
   </Step>
 
-  <Step title="Open the URL on your phone, Start, Cancel">
-    Open the Checkout URL from step 4 on a phone. Sign in with Face ID, press **Start**, watch the meter, press **Cancel** after a few seconds. Your terminal shows `subscription.canceled` with `seconds_elapsed` and what was paid.
+  <Step title="Open the URL on your phone, Start, Stop">
+    Open the Checkout URL from step 4 on a phone. Sign in with Face ID, press **Start**, watch the meter, press **Stop** after a few seconds. Your terminal shows `subscription.canceled` with `seconds_elapsed` and what was paid.
 
     ```text
     14:02:26  evt_1S2b…  subscription.canceled   → revoke access · 83s · $0.33

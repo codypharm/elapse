@@ -6,7 +6,7 @@ export const links = {
   docs: "https://docs.elapse.finance",
   github: "https://github.com/elapsefinance/elapse",
   dashboard: "/dashboard",
-  x: "https://x.com/elapsedev",
+  x: "https://x.com/elapsefinance",
 } as const;
 
 /** The merchant in the demo video: a GPU rented by the second. */
