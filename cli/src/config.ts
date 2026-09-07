@@ -65,7 +65,11 @@ export function resolveSecretKey(o: { env: NodeJS.ProcessEnv; flag: string | und
   return p ? { key: p.secret_key, source: "profile" } : null;
 }
 
-/** `--base-url`, then `ELAPSE_BASE_URL`, then the host saved by `login`, then the default. */
+/**
+ * `--base-url`, then `ELAPSE_BASE_URL`, then `ELAPSE_API_URL` (the name the Quickstart and the
+ * SDK examples export, so one export serves curl, the SDK and the CLI), then the host saved
+ * by `login`, then the default.
+ */
 export function resolveBaseUrl(o: { env: NodeJS.ProcessEnv; flag: string | undefined; saved?: string | undefined }): string {
-  return (o.flag ?? o.env.ELAPSE_BASE_URL ?? o.saved ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
+  return (o.flag ?? o.env.ELAPSE_BASE_URL ?? o.env.ELAPSE_API_URL ?? o.saved ?? DEFAULT_BASE_URL).replace(/\/+$/, "");
 }

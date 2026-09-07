@@ -16,7 +16,7 @@ Keys come from the dashboard under **Developers → API keys**. A key is shown o
 | Prefix | Mode | Money |
 | --- | --- | --- |
 | `sk_test_` | Test | Real meters on the test network, funded with a test dollar the platform hands out at checkout. Nothing you or your subscribers own moves. |
-| `sk_live_` | Live | Real dollars. |
+| `sk_live_` | Live | AUSD, held in the subscriber's own wallet and escrowed per subscription. A wallet short of the cap is asked to add funds before it can start. |
 
 The key decides the mode of everything it touches. A Product created with a test key does not exist to a live key; asking for it answers `404`, never `403`, so a mode mix-up looks like a missing object rather than a hint that it exists elsewhere.
 

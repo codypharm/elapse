@@ -41,7 +41,7 @@ Listening on :3000
 14:02:26  ↺ duplicate evt_1S2b…
 ```
 
-Open the Checkout URL on your phone, press Start, wait a few seconds, press Cancel. The second line appears in your terminal with the seconds that elapsed and what was paid. `GET /access/sub_…` now answers `{"entitled":false,"reason":"canceled"}`.
+Open the Checkout URL on your phone, press Start, wait a few seconds, press Stop. The second line appears in your terminal with the seconds that elapsed and what was paid. `GET /access/sub_…` now answers `{"entitled":false,"reason":"canceled"}`.
 
 Before recording, `npm run demo:check` signs a canceled event with your own secret and confirms the server revokes access.
 

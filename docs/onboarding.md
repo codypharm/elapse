@@ -82,6 +82,23 @@ Every change to `contracts/src` means a fresh factory: clones read the implement
 4. Restart the API, the worker and `pnpm envio dev -r` (the `-r` resets the local index to the new start block). `GET /v1/status` must show the new factory and zero indexer lag.
 5. Update the address tables in `contracts/README.md` and `docs-site/site/snippets/contracts.mdx`, and add a row to the contracts FRD's Revision table.
 
+## Deployment and DNS (elapse.finance)
+
+Furqaan holds the registrar account (passkey 2FA) and adds every record; William creates each hosting project and forwards the record it shows. Publish `@elapse/cli` to npm from `cli/` (`pnpm build && npm publish --access public`) before any judge follows the Quickstart; `@elapse/sdk` is already published.
+
+| Host | Points to | Who creates the project | Record |
+| --- | --- | --- | --- |
+| `elapse.finance`, `www` | Vercel — the Next.js app in `web/` (landing, checkout, dashboard) | William | A for the root, CNAME for `www`, both shown under the project's Domains |
+| `docs.elapse.finance` | Mintlify — `docs-site/site` from the GitHub repo | William | one CNAME, shown after adding the custom domain |
+| `api.elapse.finance` | Railway — the Bun API; the worker is a second Railway service with no host | Furqaan | one CNAME, shown on the API service |
+| `elapse.finance` (mail) | Resend — receipts and dashboard sign-in mail | William | the TXT and CNAME set Resend lists on its Domains page |
+
+Order that unblocks the most first: Resend records (mail delivers to anyone), docs (every Docs link on the landing goes live), API, then the app off its Vercel subdomain.
+
+**Railway (Furqaan).** Two services from this repo: `api` runs `bun src/index.ts`, `worker` runs `bun src/worker/index.ts`; Postgres on Neon. Environment on Railway only, never committed — the names are in `api/.env.example`: database URL, webhook KEK, Privy app id and verification key, Resend key and sender, ingest token, Monad RPC and chain id, relayer private key, dashboard and docs origins. `pnpm sync-deployments` must have run before the build so `api/deployments/10143.json` is present.
+
+**After each host answers.** Vercel: set `NEXT_PUBLIC_ELAPSE_API_URL=https://api.elapse.finance` on the web project. Railway: `DASHBOARD_ORIGIN=https://elapse.finance`, `DOCS_ORIGIN=https://docs.elapse.finance`, `PUBLIC_API_URL=https://api.elapse.finance`. The SDK and CLI defaults already name `api.elapse.finance` and need no change. Then delete the `EMAIL_FROM` override wherever it is set, once Resend shows the domain verified.
+
 ## Before a demo
 
 - The relayer wallet pays every start, cancel and settlement on testnet, in both modes. Check its MON balance first; a dry relayer answers "We can't start meters right now" on Start. Top up at https://faucet.monad.xyz.

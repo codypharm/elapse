@@ -44,7 +44,7 @@ Global options
   --json                machine-readable output on stdout, messages on stderr
   --help, --version
 
-Env: ELAPSE_SECRET_KEY, ELAPSE_BASE_URL, NO_COLOR`;
+Env: ELAPSE_SECRET_KEY, ELAPSE_BASE_URL (or ELAPSE_API_URL), NO_COLOR`;
 
 const LISTEN_USAGE = `elapse listen --forward <url>
 

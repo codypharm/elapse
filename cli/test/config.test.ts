@@ -41,5 +41,8 @@ describe("FR-CLI-002/003 profile file", () => {
     expect(resolveBaseUrl({ env: {}, flag: undefined })).toBe("https://api.elapse.finance");
     expect(resolveBaseUrl({ env: { ELAPSE_BASE_URL: "http://localhost:4000/" }, flag: undefined })).toBe("http://localhost:4000");
     expect(resolveBaseUrl({ env: { ELAPSE_BASE_URL: "http://localhost:4000" }, flag: "https://staging.elapse.finance" })).toBe("https://staging.elapse.finance");
+    // FR-CLI: the Quickstart exports ELAPSE_API_URL once for curl, the SDK and the CLI; it counts after ELAPSE_BASE_URL.
+    expect(resolveBaseUrl({ env: { ELAPSE_API_URL: "http://localhost:4000/" }, flag: undefined })).toBe("http://localhost:4000");
+    expect(resolveBaseUrl({ env: { ELAPSE_API_URL: "http://localhost:4000", ELAPSE_BASE_URL: "http://localhost:4001" }, flag: undefined })).toBe("http://localhost:4001");
   });
 });

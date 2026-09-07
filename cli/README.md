@@ -18,7 +18,7 @@ elapse events list [--limit n] [--type t]
 elapse events resend <evt_id>                  redeliver an Event to every endpoint (and the CLI, while listening)
 elapse products create --name <s> --rate <decimal>
 elapse checkout create --product <prod_id> --success-url <u> --cancel-url <u>
-Global: --api-key, --base-url, --json, --help, --version · Env: ELAPSE_SECRET_KEY, ELAPSE_BASE_URL, NO_COLOR
+Global: --api-key, --base-url, --json, --help, --version · Env: ELAPSE_SECRET_KEY, ELAPSE_BASE_URL or ELAPSE_API_URL, NO_COLOR
 ```
 
 Exit codes: 0 ok · 1 runtime error · 2 usage or auth error.
