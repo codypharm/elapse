@@ -15,12 +15,17 @@ export interface MockPlatform {
 
 export async function startMockPlatform(o: { livemode?: boolean; secret?: string } = {}): Promise<MockPlatform> {
   let stream: ServerResponse | null = null;
+  // Frames emitted before the CLI's stream request arrives wait here, the way the platform
+  // keeps queued Deliveries until a stream connects (a cold Node 20 runner opens it late).
+  const pending: string[] = [];
   const secret = o.secret ?? "whsec_mock000000000000000000000000000";
   const m: MockPlatform = { url: "", acks: [], requests: [], livemode: o.livemode ?? false, emit, drop, close };
   function emit(frame: { id: string; event_id: string; type: string; raw_body: string; manual?: true }) {
     const t = Math.floor(Date.now() / 1000);
     const data = { ...frame, created: t, headers: { "Content-Type": "application/json", "X-Elapse-Signature": `t=${t},v1=${"ab".repeat(32)}`, "X-Elapse-Delivery": frame.id } };
-    stream?.write(`event: delivery\nid: ${frame.id}\ndata: ${JSON.stringify(data)}\n\n`);
+    const chunk = `event: delivery\nid: ${frame.id}\ndata: ${JSON.stringify(data)}\n\n`;
+    if (stream) stream.write(chunk);
+    else pending.push(chunk);
   }
   function drop() {
     stream?.destroy();
@@ -47,6 +52,7 @@ export async function startMockPlatform(o: { livemode?: boolean; secret?: string
       res.writeHead(200, { "content-type": "text/event-stream" });
       res.write(`event: heartbeat\ndata: {"at":${Math.floor(Date.now() / 1000)}}\n\n`);
       stream = res;
+      for (const chunk of pending.splice(0)) res.write(chunk);
       return;
     }
     const ack = path.match(/^\/v1\/cli\/sessions\/clis_mock1\/deliveries\/([^/]+)\/ack$/);
