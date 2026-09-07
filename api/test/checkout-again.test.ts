@@ -64,6 +64,16 @@ describe("FR-API-126 start again", () => {
     expect(pub.body.merchant).toMatchObject({ success_url: "https://x.test/ok?session_id={CHECKOUT_SESSION_ID}", cancel_url: "https://x.test/no" });
     const full = await api("GET", `/v1/checkout/sessions/${r.body.id}`, { key: m.skTest });
     expect(full.status).toBe(200);
+    // one follow-on per session: the original now points at it and refuses a second
+    const orig = await api("GET", `/v1/checkout/sessions/${sessionId}`, { key: m.pkTest });
+    expect(orig.body.restarted_as).toBe(r.body.id);
+    expect(pub.body.restarted_as).toBeNull();
+    const twice = await api("POST", `/v1/checkout/sessions/${sessionId}/again`, { key: m.pkTest, body: {}, headers: await identity() });
+    expect(twice.status).toBe(409);
+    expect(twice.body.error).toMatchObject({ code: "already_restarted" });
+    expect(twice.body.error.message).toContain(r.body.id);
+    const acct = await api("GET", "/v1/account/subscriptions", { headers: await identity() });
+    expect(acct.body.data.find((x: any) => x.checkout_session === sessionId).restarted_as).toBe(r.body.id);
     const [audit] = await sql`SELECT action, target FROM audit_log WHERE action = 'checkout_session.again'`;
     expect(audit).toMatchObject({ action: "checkout_session.again", target: `${sessionId} -> ${r.body.id}` });
   });

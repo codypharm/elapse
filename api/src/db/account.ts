@@ -16,6 +16,7 @@ interface AccountRow extends SubscriptionRow {
   merchant_logo_url: string | null;
   merchant_support_url: string | null;
   receipt_emailed_at: Date | null;
+  restarted_as: string | null;
 }
 
 const COLS = sql`s.id, s.merchant_id, s.livemode, s.product_id, s.customer_id, s.checkout_session_id, s.status, s.ended_reason, s.chain_id,
@@ -23,6 +24,7 @@ const COLS = sql`s.id, s.merchant_id, s.livemode, s.product_id, s.customer_id, s
   s.max_escrow_wei::text AS max_escrow_wei, s.funded_wei::text AS funded_wei, s.settled_wei::text AS settled_wei,
   s.settled_fee_wei::text AS settled_fee_wei, s.settled_seconds, s.paused_seconds, s.started_at, s.paused_at, s.canceled_at, s.simulated, s.created_at,
   s.receipt_emailed_at,
+  (SELECT n.id FROM checkout_sessions n WHERE n.again_of = s.checkout_session_id ORDER BY n.created_at DESC LIMIT 1) AS restarted_as,
   p.name AS product_name,
   COALESCE(m.branding->>'display_name', m.name) AS merchant_name,
   m.branding->>'logo_url' AS merchant_logo_url,
@@ -65,6 +67,7 @@ export function serializeAccountSubscription(row: AccountRow, now = Math.floor(D
     status: s.status as AccountStatus,
     livemode: s.livemode,
     checkout_session: row.checkout_session_id,
+    restarted_as: row.restarted_as,
     merchant: { name: row.merchant_name, logo_url: row.merchant_logo_url, support_url: row.merchant_support_url },
     product: { name: row.product_name ?? "", rate_usd_per_second: s.rate_usd_per_second },
     started_at: s.started_at,

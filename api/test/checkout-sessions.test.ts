@@ -136,6 +136,7 @@ describe("FR-API-031 retrieve: two projections", () => {
       customer: null,
       subscription: null,
       last_max_duration_seconds: null,
+      restarted_as: null,
       max_duration_seconds: 3600,
       max_escrow_usd: "14.4",
     });

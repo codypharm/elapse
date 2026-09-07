@@ -24,6 +24,7 @@ const AccountSubscriptionSchema = z
     status: z.enum(ACCOUNT_STATUSES),
     livemode: z.boolean(),
     checkout_session: z.string().nullable(),
+    restarted_as: z.string().nullable(),
     merchant: z.object({ name: z.string(), logo_url: z.string().nullable(), support_url: z.string().nullable() }),
     product: z.object({ name: z.string(), rate_usd_per_second: z.string() }),
     started_at: z.number().int().nullable(),

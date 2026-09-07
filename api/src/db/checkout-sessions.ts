@@ -15,11 +15,14 @@ export interface CheckoutSessionRow {
   max_duration_seconds: number | null;
   /** The cap the subscriber chose on the session this one was opened from (FR-API-126), for the page to preselect. */
   last_max_duration_seconds: number | null;
+  /** The newest follow-on opened from this session (FR-API-126), or null. */
+  restarted_as: string | null;
   created_at: Date;
 }
 
 const COLS = sql`id, merchant_id, livemode, product_id, customer_id, subscription_id, success_url, cancel_url,
-  status, expires_at, max_duration_seconds, last_max_duration_seconds, created_at`;
+  status, expires_at, max_duration_seconds, last_max_duration_seconds, created_at,
+  (SELECT n.id FROM checkout_sessions n WHERE n.again_of = checkout_sessions.id ORDER BY n.created_at DESC LIMIT 1) AS restarted_as`;
 
 export async function insertCheckoutSession(input: {
   merchantId: string;
