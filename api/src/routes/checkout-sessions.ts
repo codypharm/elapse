@@ -290,7 +290,7 @@ const PrepareBody = z.strictObject({ max_duration_seconds: z.number().int().min(
  * FR-API-120 / FR-API-125: the subscriber's identity for a binding call, from `X-Privy-Token`.
  * One 401 for every token problem; 503 when the API has no Privy app to check against.
  */
-async function subscriberIdentity(c: { req: { header(name: string): string | undefined; path: string } }): Promise<SubscriberIdentity> {
+export async function subscriberIdentity(c: { req: { header(name: string): string | undefined; path: string } }): Promise<SubscriberIdentity> {
   try {
     // The reason goes to the log only (never the token); the response stays one 401 message.
     return await verifyIdentityToken(c.req.header("x-privy-token"), { onReject: (reason, detail) => console.warn("subscriber_auth_invalid", { path: c.req.path, reason, ...(detail ? { detail } : {}) }) });
@@ -320,10 +320,10 @@ const PrepareResponse = z
   .openapi("PreparedCheckoutSession");
 
 const StartBody = z.strictObject({ signature: z.string().regex(SIGNATURE, "must be a 65-byte hex signature") }).openapi("StartCheckoutSession");
-const StartResponse = z.object({ subscription: z.string(), pending_tx: z.string() }).openapi("StartedCheckoutSession");
+export const StartResponse = z.object({ subscription: z.string(), pending_tx: z.string() }).openapi("StartedCheckoutSession");
 
 /** Service errors → FR-API-082 shape. Conflicts are 409; a missing relayer is our fault (503). */
-function mapCheckoutError(e: unknown): never {
+export function mapCheckoutError(e: unknown): never {
   if (e instanceof CheckoutStateError) {
     if (e.code === "subscriber_mismatch") throw new ApiError(403, "authentication_error", e.message, undefined, e.code);
     const status = e.code === "already_started" || e.code === "session_not_open" || e.code === "not_running" ? 409 : 400;
@@ -399,7 +399,7 @@ checkoutSessions.openapi(
 
 // ─── Subscriber cancel (contracts FR-CON-017, checkout FR-CHK-008) ─────────────
 
-const CancelPrepareResponse = z
+export const CancelPrepareResponse = z
   .object({
     subscription: z.string(),
     stream_address: z.string(),
@@ -409,7 +409,7 @@ const CancelPrepareResponse = z
     message: z.string().openapi({ description: `32 bytes to personal-sign (EIP-191). Valid ${CANCEL_TTL_SECONDS} s.` }),
   })
   .openapi("CancelAuthorisation");
-const CancelBody = z.strictObject({ signature: z.string().regex(SIGNATURE, "must be a 65-byte hex signature"), deadline: z.string().regex(/^\d{1,12}$/) }).openapi("CancelCheckoutSession");
+export const CancelBody = z.strictObject({ signature: z.string().regex(SIGNATURE, "must be a 65-byte hex signature"), deadline: z.string().regex(/^\d{1,12}$/) }).openapi("CancelCheckoutSession");
 
 checkoutSessions.openapi(
   createRoute({

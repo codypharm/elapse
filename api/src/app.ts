@@ -4,6 +4,7 @@ import { checkoutOrigin } from "./middleware/auth";
 import { config } from "./config";
 import { ApiError } from "./lib/errors";
 import { router } from "./lib/openapi";
+import { account } from "./routes/account";
 import { apiKeys } from "./routes/api-keys";
 import { checkoutSessions } from "./routes/checkout-sessions";
 import { customers } from "./routes/customers";
@@ -55,12 +56,13 @@ app.use("/v1/*", async (c, next) => {
       await next();
     });
   }
-  if (c.req.path.startsWith("/v1/checkout/sessions") || c.req.path === "/v1/status") return checkoutCors(c, next);
+  if (c.req.path.startsWith("/v1/checkout/sessions") || c.req.path.startsWith("/v1/account") || c.req.path === "/v1/status") return checkoutCors(c, next);
   return next();
 });
 
 app.route("/v1", products);
 app.route("/v1", checkoutSessions);
+app.route("/v1", account);
 app.route("/v1", subscriptions);
 app.route("/v1", customers);
 app.route("/v1", invoices);
