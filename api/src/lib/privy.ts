@@ -56,6 +56,16 @@ export function privySettings(): PrivySettings | null {
   return privyAppId && privyVerificationKey ? { appId: privyAppId, verificationKey: privyVerificationKey } : null;
 }
 
+/**
+ * The dashboard's key arrives in whatever shape it was pasted: full PEM, PEM on one line,
+ * literal `\n` for newlines, or the bare base64 body. Hono needs a real PEM with the
+ * BEGIN/END lines, so every shape is normalised to that.
+ */
+export function normalisePem(key: string): string {
+  const body = key.replace(/\\n/g, "\n").replace(/-+(BEGIN|END)[^-]*-+/g, "").replace(/\s/g, "");
+  return `-----BEGIN PUBLIC KEY-----\n${body.match(/.{1,64}/g)?.join("\n") ?? ""}\n-----END PUBLIC KEY-----`;
+}
+
 interface LinkedAccount {
   type?: unknown;
   address?: unknown;
@@ -64,30 +74,45 @@ interface LinkedAccount {
   wallet_client_type?: unknown;
 }
 
+/** Why a token was refused: for the log, never for the response (the response stays one message). */
+export type RejectReason = "missing" | "malformed" | "signature" | "issuer" | "audience" | "algorithm" | "expired" | "no_subject" | "no_embedded_wallet" | "verifier_error";
+
 export async function verifyIdentityToken(
   token: string | undefined,
-  o: Partial<PrivySettings> & { now?: number } = {},
+  o: Partial<PrivySettings> & { now?: number; onReject?: (reason: RejectReason, detail?: string) => void } = {},
 ): Promise<SubscriberIdentity> {
   const settings = o.appId && o.verificationKey ? { appId: o.appId, verificationKey: o.verificationKey } : privySettings();
   if (!settings) throw new SubscriberAuthUnconfigured();
-  if (!token || token.split(".").length !== 3) throw new SubscriberAuthError();
+  const reject = (reason: RejectReason, detail?: string): never => {
+    o.onReject?.(reason, detail);
+    throw new SubscriberAuthError();
+  };
+  if (!token) return reject("missing");
+  if (token.split(".").length !== 3) return reject("malformed");
 
   let payload: Record<string, unknown>;
   try {
     // Hono checks the signature, issuer and audience; time is checked below with our clock and skew.
-    payload = (await verify(token, settings.verificationKey, { alg: "ES256", iss: ISSUER, aud: settings.appId, exp: false, iat: false, nbf: false })) as Record<string, unknown>;
-  } catch {
-    throw new SubscriberAuthError();
+    payload = (await verify(token, normalisePem(settings.verificationKey), { alg: "ES256", iss: ISSUER, aud: settings.appId, exp: false, iat: false, nbf: false })) as Record<string, unknown>;
+  } catch (e) {
+    // Only the error's name reaches the log: Hono's messages can carry the token.
+    const name = (e as { name?: string }).name ?? "";
+    if (name === "JwtTokenSignatureMismatched") return reject("signature");
+    if (name === "JwtTokenIssuer") return reject("issuer");
+    if (name === "JwtTokenAudience" || name === "JwtPayloadRequiresAud") return reject("audience");
+    if (name === "JwtAlgorithmMismatch") return reject("algorithm");
+    if (name === "JwtTokenInvalid" || name === "JwtHeaderInvalid") return reject("malformed", name);
+    return reject("verifier_error", name); // e.g. the verification key could not be imported
   }
 
   const now = o.now ?? Math.floor(Date.now() / 1000);
   const exp = payload.exp;
-  if (typeof exp !== "number" || !Number.isFinite(exp) || exp + SKEW_SECONDS <= now) throw new SubscriberAuthError();
-  if (typeof payload.sub !== "string" || !payload.sub) throw new SubscriberAuthError();
+  if (typeof exp !== "number" || !Number.isFinite(exp) || exp + SKEW_SECONDS <= now) return reject("expired");
+  if (typeof payload.sub !== "string" || !payload.sub) return reject("no_subject");
 
   const accounts = linkedAccounts(payload.linked_accounts);
   const wallet = accounts.find((a) => a.type === "wallet" && a.chain_type === "ethereum" && a.wallet_client_type === "privy" && typeof a.address === "string" && /^0x[0-9a-fA-F]{40}$/.test(a.address));
-  if (!wallet) throw new SubscriberAuthError();
+  if (!wallet) return reject("no_embedded_wallet");
 
   const emailAccount = accounts.find((a) => a.type === "email" && typeof a.address === "string") ?? accounts.find((a) => a.type === "google_oauth" && typeof a.email === "string");
   const email = emailAccount ? String(emailAccount.type === "email" ? emailAccount.address : emailAccount.email) : null;

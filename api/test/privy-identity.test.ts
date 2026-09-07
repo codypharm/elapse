@@ -69,6 +69,35 @@ describe("FR-API-120 verifyIdentityToken", () => {
     expect((await verifyIdentityToken(await token(privateKey, { exp: NOW - 30 }), o)).walletAddress).toBe(WALLET);
   });
 
+  it("FR_API_120_the_failure_class_is_reported_for_the_log_without_the_token", async () => {
+    const { privateKey, pem } = await keyPair();
+    const other = await keyPair();
+    const cases: [string, string | undefined][] = [
+      ["missing", undefined],
+      ["malformed", "not.a.jwt.at.all"],
+      ["signature", await token(other.privateKey)],
+      ["audience", await token(privateKey, { aud: "cmapp_other" })],
+      ["issuer", await token(privateKey, { iss: "example.com" })],
+      ["expired", await token(privateKey, { exp: NOW - 61 })],
+      ["no_embedded_wallet", await token(privateKey, {}, [{ type: "email", address: "e@example.com" }])],
+    ];
+    for (const [expected, t] of cases) {
+      const seen: string[] = [];
+      await verifyIdentityToken(t, { appId: APP_ID, verificationKey: pem, now: NOW, onReject: (r) => seen.push(r) }).catch(() => {});
+      expect(seen, expected).toEqual([expected]);
+    }
+  });
+
+  it("FR_API_120_the_verification_key_may_be_pasted_bare_one_line_or_with_literal_newlines", async () => {
+    const { privateKey, pem } = await keyPair();
+    const body = pem.replace(/-+(BEGIN|END).*?-+/g, "").replace(/\s/g, "");
+    const shapes = [pem, body, `-----BEGIN PUBLIC KEY-----${body}-----END PUBLIC KEY-----`, pem.replace(/\n/g, "\\n"), `  ${body}\n`];
+    for (const key of shapes) {
+      const id = await verifyIdentityToken(await token(privateKey), { appId: APP_ID, verificationKey: key, now: NOW });
+      expect(id.walletAddress, key.slice(0, 12)).toBe(WALLET);
+    }
+  });
+
   it("FR_API_125_unconfigured_is_its_own_error_before_any_token_is_read", async () => {
     const { privateKey } = await keyPair();
     await expect(verifyIdentityToken(await token(privateKey), { now: NOW })).rejects.toBeInstanceOf(SubscriberAuthUnconfigured);

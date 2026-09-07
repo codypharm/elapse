@@ -109,10 +109,23 @@ describe("KeysPage", () => {
   });
 
   it("switches lists with the mode (FR-DSH-074)", async () => {
-    const m = await signIn(api);
+    const m = { ...(await signIn(api)), payoutAddress: "0x1111111111111111111111111111111111111111" };
     mount(api, m);
     await screen.findByText((await api.listKeys("test")).publishable);
     setMode("live");
     expect(await screen.findByText((await api.listKeys("live")).publishable)).toBeInTheDocument();
+  });
+
+  it("live mode without a payout address shows the gate instead of keys; test mode is unchanged (FR-DSH-075)", async () => {
+    const m = { ...(await signIn(api)), payoutAddress: null };
+    mount(api, m);
+    await screen.findByText((await api.listKeys("test")).publishable);
+    expect(screen.getAllByRole("button", { name: /Create secret key/ }).length).toBeGreaterThan(0);
+    setMode("live");
+    const gate = await screen.findByRole("status", { name: "Live keys gated" });
+    expect(gate).toHaveTextContent("Set a payout address before going live");
+    expect(within(gate).getByRole("link", { name: /Settings/ })).toHaveAttribute("href", "/dashboard/settings");
+    expect(screen.queryByText(/pk_live_/)).toBeNull();
+    expect(screen.queryByRole("button", { name: /Create secret key/ })).toBeNull();
   });
 });

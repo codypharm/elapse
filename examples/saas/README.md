@@ -10,11 +10,12 @@ It is the code the [Quickstart](https://docs.elapse.finance/quickstart) is built
 
 - Node 20 or newer.
 - An Elapse dashboard account with a test secret key (Dashboard → Developers → API keys).
+- A payout address on that account (Dashboard → Settings). Without one, `npm start` stops at "Set a payout address in Settings before creating checkout links."
 
 ## Run it
 
 ```sh
-git clone https://github.com/Codypharm/elapse
+git clone https://github.com/elapsefinance/elapse
 cd elapse/examples/saas
 cp .env.example .env        # paste ELAPSE_SECRET_KEY and ELAPSE_API_URL
 npm install

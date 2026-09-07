@@ -84,9 +84,14 @@ export function PayoutSection() {
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Live validation: the button wakes only when the address is well-formed and typed twice the same (FR-DSH-101).
+  const wellFormed = /^0x[0-9a-fA-F]{40}$/.test(address);
+  const formHint = address && !wellFormed ? "An address is 0x followed by 40 hex characters." : null;
+  const matchHint = confirm && confirm !== address ? "The two addresses don't match." : null;
+  const ready = wellFormed && confirm === address && !busy;
   const change = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !ready) return;
     setBusy(true);
     setError(null);
     try {
@@ -134,11 +139,21 @@ export function PayoutSection() {
             </DialogHeader>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="payout-new">New address</Label>
-              <Input id="payout-new" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="0x…" spellCheck={false} autoFocus className="numerals h-10 text-[13px]" />
+              <Input id="payout-new" value={address} onChange={(e) => setAddress(e.target.value.trim())} placeholder="0x…" spellCheck={false} autoFocus aria-invalid={formHint ? true : undefined} aria-describedby={formHint ? "payout-new-hint" : undefined} className="numerals h-10 text-[13px]" />
+              {formHint && (
+                <p id="payout-new-hint" className="text-[13px] text-ink-soft">
+                  {formHint}
+                </p>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="payout-confirm">Type it again</Label>
-              <Input id="payout-confirm" value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="0x…" spellCheck={false} aria-invalid={error ? true : undefined} className="numerals h-10 text-[13px]" />
+              <Input id="payout-confirm" value={confirm} onChange={(e) => setConfirm(e.target.value.trim())} placeholder="0x…" spellCheck={false} aria-invalid={error || matchHint ? true : undefined} aria-describedby={matchHint ? "payout-confirm-hint" : undefined} className="numerals h-10 text-[13px]" />
+              {matchHint && !error && (
+                <p id="payout-confirm-hint" className="text-[13px] text-ink-soft">
+                  {matchHint}
+                </p>
+              )}
               {error && (
                 <p role="alert" className="text-[13px] text-caution">
                   {error}
@@ -149,7 +164,7 @@ export function PayoutSection() {
               <Button type="button" variant="outline" onClick={() => setOpen(false)} className="h-9">
                 Cancel
               </Button>
-              <Button type="submit" disabled={busy} className="h-9">
+              <Button type="submit" disabled={!ready} className="h-9">
                 {busy ? "Changing…" : "Change address"}
               </Button>
             </DialogFooter>

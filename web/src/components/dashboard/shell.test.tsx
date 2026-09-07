@@ -73,4 +73,21 @@ describe("DashboardShell", () => {
     expect(screen.queryByRole("status", { name: /test mode/i })).not.toBeInTheDocument();
     expect(localStorage.getItem(MODE_STORAGE_KEY)).toBe("live");
   });
+
+  it("shows the payout banner on every page until the address is set (FR-DSH-015)", () => {
+    const { rerender } = render(
+      <DashboardShell merchant={merchant}>
+        <p>content</p>
+      </DashboardShell>,
+    );
+    const banner = screen.getByRole("status", { name: "Payout address missing" });
+    expect(banner).toHaveTextContent("Set a payout address to create checkout links and go live");
+    expect(within(banner).getByRole("link", { name: /Settings/ })).toHaveAttribute("href", "/dashboard/settings");
+    rerender(
+      <DashboardShell merchant={{ ...merchant, payoutAddress: "0x1111111111111111111111111111111111111111" }}>
+        <p>content</p>
+      </DashboardShell>,
+    );
+    expect(screen.queryByRole("status", { name: "Payout address missing" })).toBeNull();
+  });
 });

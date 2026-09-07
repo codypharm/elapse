@@ -98,6 +98,18 @@ describe("FR-API-030 checkout.sessions.create", () => {
   });
 });
 
+describe("FR-API-035 payout address gates Checkout", () => {
+  test("no payout address → 400 no_payout_address with the fix in the sentence, no session row; set it → 200", async () => {
+    await sql`UPDATE merchants SET payout_address = NULL WHERE id = ${f.merchantId}`;
+    const r = await api("POST", "/v1/checkout/sessions", { key: f.skTest, body: good() });
+    expect(r.status).toBe(400);
+    expect(r.body.error).toMatchObject({ type: "invalid_request_error", code: "no_payout_address", message: "Set a payout address in Settings before creating checkout links." });
+    expect((await sql`SELECT count(*)::int AS n FROM checkout_sessions WHERE merchant_id = ${f.merchantId}`)[0]!.n).toBe(0);
+    await sql`UPDATE merchants SET payout_address = ${f.payoutAddress} WHERE id = ${f.merchantId}`;
+    expect((await api("POST", "/v1/checkout/sessions", { key: f.skTest, body: good() })).status).toBe(200);
+  });
+});
+
 describe("FR-API-031 retrieve: two projections", () => {
   test("sk_ gets the full object; pk_ gets the public projection only", async () => {
     const cs = (await api("POST", "/v1/checkout/sessions", { key: f.skTest, body: { ...good(), max_duration_seconds: 3600 } })).body;

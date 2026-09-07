@@ -58,13 +58,21 @@ describe("SettingsPage", () => {
     await user.click(screen.getByRole("button", { name: /change payout address/i }));
     const dialog = await screen.findByRole("dialog");
     const addr = "0x1234567890abcdef1234567890abcdef12345678";
+    const submit = within(dialog).getByRole("button", { name: /^change address$/i });
+    expect(submit).toBeDisabled();
+    await user.type(within(dialog).getByLabelText(/^new address/i), "0xnot-an-address");
+    expect(within(dialog).getByText(/40 hex characters/i)).toBeInTheDocument();
+    await user.clear(within(dialog).getByLabelText(/^new address/i));
     await user.type(within(dialog).getByLabelText(/^new address/i), addr);
+    expect(submit).toBeDisabled();
     await user.type(within(dialog).getByLabelText(/type it again/i), addr.slice(0, -1) + "9");
-    await user.click(within(dialog).getByRole("button", { name: /^change address$/i }));
-    expect(await within(dialog).findByRole("alert")).toHaveTextContent(/match/i);
+    expect(within(dialog).getByText(/don't match/i)).toBeInTheDocument();
+    expect(submit).toBeDisabled();
     await user.clear(within(dialog).getByLabelText(/type it again/i));
     await user.type(within(dialog).getByLabelText(/type it again/i), addr);
-    await user.click(within(dialog).getByRole("button", { name: /^change address$/i }));
+    expect(within(dialog).queryByText(/don't match/i)).toBeNull();
+    expect(submit).toBeEnabled();
+    await user.click(submit);
     await waitFor(() => expect(setMerchant).toHaveBeenCalledWith(expect.objectContaining({ payoutAddress: addr })));
   });
 

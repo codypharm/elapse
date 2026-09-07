@@ -2,7 +2,7 @@ import { createRoute, z } from "@hono/zod-openapi";
 import { config } from "../config";
 import { findCheckoutSession, findCheckoutSessionById, insertCheckoutSession, type CheckoutSessionRow } from "../db/checkout-sessions";
 import { judgeDeliveryLog } from "../db/deliveries";
-import { getMerchantBranding, type MerchantBranding } from "../db/merchants";
+import { getMerchantBranding, getPayoutAddress, type MerchantBranding } from "../db/merchants";
 import { findProduct, type ProductRow } from "../db/products";
 import { ApiError, invalid, notFound } from "../lib/errors";
 import { findSubscription, serializeSubscription, type SubscriptionRow } from "../db/subscriptions";
@@ -230,6 +230,10 @@ checkoutSessions.openapi(
     const product = await findProduct(auth.merchantId, auth.livemode, body.product);
     if (!product) throw invalid(`No such product: '${body.product}'`, "product");
     if (!product.active) throw invalid(`Product '${body.product}' is archived.`, "product");
+    // FR-API-035: no checkout link for a merchant who cannot be paid; the subscriber never sees this.
+    if (!(await getPayoutAddress(auth.merchantId))) {
+      throw new ApiError(400, "invalid_request_error", "Set a payout address in Settings before creating checkout links.", undefined, "no_payout_address");
+    }
     const merchant = (await getMerchantBranding(auth.merchantId))!;
     const row = await insertCheckoutSession({
       merchantId: auth.merchantId,
@@ -286,9 +290,10 @@ const PrepareBody = z.strictObject({ max_duration_seconds: z.number().int().min(
  * FR-API-120 / FR-API-125: the subscriber's identity for a binding call, from `X-Privy-Token`.
  * One 401 for every token problem; 503 when the API has no Privy app to check against.
  */
-async function subscriberIdentity(c: { req: { header(name: string): string | undefined } }): Promise<SubscriberIdentity> {
+async function subscriberIdentity(c: { req: { header(name: string): string | undefined; path: string } }): Promise<SubscriberIdentity> {
   try {
-    return await verifyIdentityToken(c.req.header("x-privy-token"));
+    // The reason goes to the log only (never the token); the response stays one 401 message.
+    return await verifyIdentityToken(c.req.header("x-privy-token"), { onReject: (reason, detail) => console.warn("subscriber_auth_invalid", { path: c.req.path, reason, ...(detail ? { detail } : {}) }) });
   } catch (e) {
     if (e instanceof SubscriberAuthUnconfigured) throw new ApiError(503, "api_error", e.message, undefined, "subscriber_auth_unconfigured");
     if (e instanceof SubscriberAuthError) throw new ApiError(401, "authentication_error", e.message, undefined, "subscriber_auth_invalid");

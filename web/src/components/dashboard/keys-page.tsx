@@ -13,7 +13,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { MoreHorizontal, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/site/copy-button";
@@ -32,8 +33,10 @@ import { StatusChip, type ChipTone } from "./status-chip";
 const TONE: Record<ApiKey["status"], ChipTone> = { active: "neutral", expiring: "caution", expired: "muted", revoked: "destructive" };
 
 export function KeysPage() {
-  const { api } = useMerchant();
+  const { api, merchant } = useMerchant();
   const mode = useMode();
+  // FR-DSH-075: live keys exist only once the merchant can be paid (API FR-API-036).
+  const gated = mode === "live" && !merchant.payoutAddress;
   const fetcher = useCallback(() => api.listKeys(mode), [api, mode]);
   const { data, loading, stale, reload } = usePoll(fetcher);
 
@@ -90,12 +93,24 @@ export function KeysPage() {
         title="API keys"
         lede={stale ? "Reconnecting…" : mode === "test" ? "Test keys talk to the testnet. Nothing here moves real money." : "Live keys move real money. Keep them on the server."}
         actions={
-          <Button onClick={() => setCreating(true)} className="h-9">
-            <Plus data-icon="inline-start" className="size-4" />
-            Create secret key
-          </Button>
+          gated ? undefined : (
+            <Button onClick={() => setCreating(true)} className="h-9">
+              <Plus data-icon="inline-start" className="size-4" />
+              Create secret key
+            </Button>
+          )
         }
       />
+
+      {gated && (
+        <div role="status" aria-label="Live keys gated" className="mt-8 rounded-lg border border-border bg-muted px-4 py-6">
+          <p className="text-[15px] font-semibold">Set a payout address before going live.</p>
+          <p className="mt-1 text-[13px] text-ink-soft">Live keys move real money, so Elapse needs somewhere to send yours first.</p>
+          <Link href="/dashboard/settings" className={cn(buttonVariants({ variant: "outline" }), "mt-4 h-9")}>
+            Open Settings
+          </Link>
+        </div>
+      )}
 
       {data?.secret.some((k) => k.status === "expiring") && (
         <p role="status" aria-label="Expiring keys" className="mt-6 rounded-lg border border-caution/25 bg-caution-soft px-4 py-3 text-[13px]">
@@ -104,6 +119,7 @@ export function KeysPage() {
         </p>
       )}
 
+      {!gated && (
       <section className="mt-8">
         <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">Publishable key</h2>
         <p className="mt-1 text-[13px] text-ink-soft">Safe in a browser. It can only read checkout sessions.</p>
@@ -116,7 +132,9 @@ export function KeysPage() {
           </div>
         )}
       </section>
+      )}
 
+      {!gated && (
       <section className="mt-10">
         <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">Secret keys</h2>
         <p className="mt-1 text-[13px] text-ink-soft">Server-side only. Shown once at creation; roll with a grace period, never with downtime.</p>
@@ -145,6 +163,7 @@ export function KeysPage() {
           </ol>
         )}
       </section>
+      )}
 
       <CreateKeyDialog open={creating} onCancel={() => setCreating(false)} onCreate={create} busy={busy} />
       <RollKeyDialog target={rolling} onCancel={() => setRolling(null)} onRoll={roll} busy={busy} />

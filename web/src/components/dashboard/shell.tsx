@@ -34,6 +34,7 @@ import { links } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { useMerchantOptional } from "./merchant-context";
 import { ModeBanner } from "./mode-banner";
+import { PayoutBanner } from "./payout-banner";
 import { NotificationsBell } from "./notifications-bell";
 import { SearchBox } from "./search-box";
 import { ModeToggle } from "./mode-toggle";
@@ -129,6 +130,7 @@ export function DashboardShell({
         </header>
 
         <ModeBanner />
+        <PayoutBanner merchant={merchant} />
 
         <main className="flex min-w-0 flex-1 flex-col">{children}</main>
       </div>

@@ -1,6 +1,6 @@
 # Merchant dashboard (`/dashboard/*`) — FRD
 
-Status: **Signed 2026-09-03 (William)** — approved after review; seventeen grill-me decisions recorded above. May be revisited. · Surface: Operate (merchant, desktop-first, reads on mobile) · Sources: design brief Surface 3; detailed doc §3, §5.2, §8, §12 Week 4; `api-frd.md`, `worker-frd.md`, `contracts-frd.md`; grill-me 2026-09-03.
+Status: **Signed 2026-09-03 (William); FR-DSH-015/075 signed 2026-09-07 (William)** — approved after review; seventeen grill-me decisions recorded above. May be revisited. · Surface: Operate (merchant, desktop-first, reads on mobile) · Sources: design brief Surface 3; detailed doc §3, §5.2, §8, §12 Week 4; `api-frd.md`, `worker-frd.md`, `contracts-frd.md`; grill-me 2026-09-03.
 
 ## Problem
 
@@ -87,6 +87,7 @@ Scope note (2026-09-03): decisions 11–17 added the ledger, notifications, and 
 | FR-DSH-011 | `/login/verify?token=` exchanges the token for an HttpOnly session cookie and redirects to `/dashboard`. Expired or used tokens show "This link has expired" with a button back to `/login`. Tokens are single-use and expire in 15 min. | Mock API: valid, expired, used token states. |
 | FR-DSH-012 | Every `/dashboard/*` route requires the session; without it, redirect to `/login?next=`. The session is never readable from JavaScript. | Route guard test. |
 | FR-DSH-013 | First-run capture on the first dashboard visit: business name (required) and payout address (optional, can be set later in Settings, with the helper "This is where settled funds arrive"). One screen, not a wizard. | Form test; skipping payout is allowed. |
+| FR-DSH-015 | Payout banner ([ADR 2026-09-07 payout gate](../decisions/2026-09-07-payout-address-gates-checkout-and-live-keys.md)): while the merchant has no payout address, every `/dashboard/*` page shows one persistent banner under the header, "Set a payout address to create checkout links and go live", with a Settings link. It disappears the moment the address is saved. "Copy Checkout URL" (FR-DSH-032) and the Developers page's live-key actions show the API's `no_payout_address` sentence as their error. | Render test with and without the address; banner gone after save. |
 | FR-DSH-014 | Sign out clears the cookie and returns to `/login`. | Test. |
 
 ### Home (design brief 3.3; decision 6)
@@ -141,6 +142,7 @@ Scope note (2026-09-03): decisions 11–17 added the ledger, notifications, and 
 | FR-DSH-072 | Roll: choose "Expire the old key now / in 1 hour / in 24 hours" → new key revealed once; old key row shows "Expires in 23 h 59 m". | State test with fake timers. |
 | FR-DSH-073 | Revoke with confirmation naming the key; the row shows Revoked and stays for the audit trail. | Test. |
 | FR-DSH-074 | Test keys and live keys are separate lists, selected by the mode toggle. | Mode switch test. |
+| FR-DSH-075 | Live keys gated ([ADR 2026-09-07 payout gate](../decisions/2026-09-07-payout-address-gates-checkout-and-live-keys.md)): in live mode without a payout address, the Developers page replaces the publishable key and the Create secret key button with one sentence, "Set a payout address before going live", linking to Settings. Test mode is unchanged. | Mode switch test without the address. |
 
 ### Developers → Webhooks and deliveries (design brief 3.9; worker FRD FR-WRK-030–041)
 
@@ -307,3 +309,7 @@ Second round ("we missed something"):
 | 2026-09-06 | Claude (for William) | Slice 2: Products (FR-DSH-030..033) on the real API. `active_subscriptions` added to the product object; archived products filtered client-side; "Copy Checkout URL" creates a real session whose success and cancel URLs are the dashboard's own Subscriptions and Products pages. Proven headless: create product → copy link → a real `/c/cs_…` URL. Dashboard CORS precedence fixed for the shared dev origin. |
 | 2026-09-06 | Claude (for William) | Slice 3: Home overview (FR-DSH-021..023) via `GET /v1/dashboard/overview` (tiles: running now, accrued since midnight UTC for active meters, settled net this week by `period_end`, failed this week; ten running meters; ten recent events); Subscriptions list/detail/cancel (FR-DSH-040..044: detail joins events by object id and invoices by subscription; cancel submits then polls to `canceled` and builds the receipt from the chain's totals); Invoices list (FR-DSH-060, paid only). Subscription object gains `product_name`/`customer_email`. Verified headless on William's real run. Remaining `NotWired`: ledger, balance, notifications, activity, customers, search, delete test data, payout change. |
 | 2026-09-06 | Claude (for William) | Slice 4: the rest of the dashboard on the real API — Customers (FR-DSH-050/051), Balance & payouts with the ledger and CSV (FR-DSH-120..124), payout address change (FR-DSH-101), Settings profile/branding/notification switches, Notifications (FR-DSH-130..132), Activity (FR-DSH-140), search (FR-DSH-005), delete test data (FR-DSH-105). No `NotWired` methods remain. Verified headless on William's merchant: balance reads the payout address's token balance from the chain ($0.52668 = his 133 s net of fee). |
+| 2026-09-07 | Claude (for William) | FR-DSH-015 payout banner and FR-DSH-075 live keys gated ([ADR 2026-09-07 payout gate](../decisions/2026-09-07-payout-address-gates-checkout-and-live-keys.md)). Awaiting signature. |
+| 2026-09-07 | William | Signed FR-DSH-015/075. |
+| 2026-09-07 | Claude (for William) | Built FR-DSH-015 (`payout-banner.tsx` in the shell, gone once `merchant.payoutAddress` is set) and FR-DSH-075 (`keys-page.tsx` shows the gate in live mode without an address; test mode unchanged). Tests in `shell.test.tsx` and `keys-page.test.tsx`; web 263 pass. Example README's prerequisites name the address. |
+| 2026-09-07 | Claude (for William) | FR-DSH-101 tightened after William's run: the payout dialog validates live. The button is disabled until the address is `0x` + 40 hex and the second field matches; a hint names the problem while typing ("An address is 0x followed by 40 hex characters.", "The two addresses don't match."). Test in `settings-page.test.tsx`. |

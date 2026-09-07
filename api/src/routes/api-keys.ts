@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { createApiKey, listApiKeys, revokeApiKey, rollApiKey, type ApiKeyListRow, type ApiKeyRow } from "../db/api-keys";
-import { invalid, notFound } from "../lib/errors";
+import { ApiError, invalid, notFound } from "../lib/errors";
+import { getPayoutAddress } from "../db/merchants";
 import { router } from "../lib/openapi";
 import { clientIp, sessionAuth, type AuthEnv } from "../middleware/auth";
 
@@ -67,7 +68,9 @@ apiKeys.openapi(
   async (c) => {
     const auth = c.get("auth");
     const rows = await listApiKeys(auth.merchantId, auth.livemode);
-    return c.json({ object: "list" as const, data: rows.map((k) => serializeKey(k)) }, 200);
+    // FR-API-036: the live publishable key stays hidden until the merchant can be paid.
+    const gated = auth.livemode && !(await getPayoutAddress(auth.merchantId));
+    return c.json({ object: "list" as const, data: rows.filter((k) => !(gated && k.kind === "pk")).map((k) => serializeKey(k)) }, 200);
   },
 );
 
@@ -84,6 +87,10 @@ apiKeys.openapi(
   async (c) => {
     const { name } = c.req.valid("json");
     const auth = c.get("auth");
+    // FR-API-036: no live key without a payout address, so a live integration cannot be published unpaid.
+    if (auth.livemode && !(await getPayoutAddress(auth.merchantId))) {
+      throw new ApiError(400, "invalid_request_error", "Set a payout address before going live.", undefined, "no_payout_address");
+    }
     const ip = clientIp(c);
     const { row, plaintext } = await createApiKey({ merchantId: auth.merchantId, kind: "sk", livemode: auth.livemode, name, actor: auth.actor, ...(ip ? { ip } : {}) });
     return c.json(serializeKey({ ...row, plaintext: null, created_at: new Date(), last_used_at: null, revoked_at: null, expires_at: null }, plaintext), 200);

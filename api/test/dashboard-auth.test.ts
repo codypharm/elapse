@@ -188,13 +188,23 @@ describe("FR-API-003 / FR-API-002 / FR-API-105 api_keys", () => {
     expect((await request("/v1/api_keys", { body: {}, headers: { cookie } })).status).toBe(400);
   });
 
-  test("a publishable key per mode is created on first sign-in", async () => {
+  test("a publishable key per mode is created on first sign-in; the live one is shown only once a payout address is set (FR-API-036)", async () => {
     const { cookie } = await signIn();
     const t = await request("/v1/api_keys", { method: "GET", headers: { cookie } });
     expect(t.body.data.filter((k: any) => k.kind === "pk")).toHaveLength(1);
-    const l = await request("/v1/api_keys", { method: "GET", headers: { cookie, "x-elapse-mode": "live" } });
+    const live = { cookie, "x-elapse-mode": "live" };
+    const hidden = await request("/v1/api_keys", { method: "GET", headers: live });
+    expect(hidden.status).toBe(200);
+    expect(hidden.body.data.filter((k: any) => k.kind === "pk")).toHaveLength(0);
+    const refused = await request("/v1/api_keys", { body: { name: "prod" }, headers: live });
+    expect(refused.status).toBe(400);
+    expect(refused.body.error).toMatchObject({ code: "no_payout_address", message: "Set a payout address before going live." });
+    expect((await request("/v1/api_keys", { body: { name: "dev" }, headers: { cookie } })).status).toBe(200);
+    await request("/v1/dashboard/me", { body: { name: "Acme", payout_address: "0x1111111111111111111111111111111111111111" }, headers: { cookie } });
+    const l = await request("/v1/api_keys", { method: "GET", headers: live });
     expect(l.body.data.filter((k: any) => k.kind === "pk")).toHaveLength(1);
-    expect(l.body.data[0].publishable_key).toMatch(/^pk_live_/);
+    expect(l.body.data.find((k: any) => k.kind === "pk").publishable_key).toMatch(/^pk_live_/);
+    expect((await request("/v1/api_keys", { body: { name: "prod" }, headers: live })).status).toBe(200);
   });
 
   test("the new key works as a bearer; sk_ cannot manage keys (FR-API-003 is cookie-only)", async () => {
@@ -259,6 +269,7 @@ describe("FR-API-003 / FR-API-002 / FR-API-105 api_keys", () => {
 
   test("keys are listed per mode", async () => {
     const { cookie } = await signIn();
+    await request("/v1/dashboard/me", { body: { name: "Acme", payout_address: "0x1111111111111111111111111111111111111111" }, headers: { cookie } }); // live keys need it (FR-API-036)
     await request("/v1/api_keys", { body: { name: "t" }, headers: { cookie } });
     await request("/v1/api_keys", { body: { name: "l" }, headers: { cookie, "x-elapse-mode": "live" } });
     const t = (await request("/v1/api_keys", { method: "GET", headers: { cookie } })).body.data.filter((k: any) => k.kind === "sk");
