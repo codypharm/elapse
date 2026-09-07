@@ -5,7 +5,7 @@ You have read `docs/README.md`. This gets you running and tells you how we work.
 ## Setup (15 minutes)
 
 ```bash
-git clone git@github.com:furqaannabi/elapse.git && cd elapse
+git clone git@github.com:elapsefinance/elapse.git && cd elapse
 corepack enable            # pnpm 9.15 is pinned in package.json
 pnpm install
 ```

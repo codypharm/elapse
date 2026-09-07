@@ -12,7 +12,7 @@ import CliListen from '/snippets/cli-listen.mdx';
 
 Takes about 10 minutes · you need Node 20 and a dashboard account.
 
-Every snippet on this page is extracted from the finished merchant in [`examples/saas`](https://github.com/furqaannabi/elapse/tree/master/examples/saas), so it runs as written. If you would rather read code than follow steps, clone that folder and run `npm start`.
+Every snippet on this page is extracted from the finished merchant in [`examples/saas`](https://github.com/elapsefinance/elapse/tree/master/examples/saas), so it runs as written. If you would rather read code than follow steps, clone that folder and run `npm start`.
 
 <Steps>
   <Step title="Get a test secret key">
@@ -84,7 +84,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
       <Tab title="TypeScript">
         <ExampleVerify />
         <ExampleHandle />
-        `constructEvent` throws on a missing, malformed, expired or mismatched signature. Anything it returns is genuine. The full handler, with the entitlement map and the six actions, is 45 lines in [`webhooks.ts`](https://github.com/furqaannabi/elapse/blob/master/examples/saas/src/webhooks.ts).
+        `constructEvent` throws on a missing, malformed, expired or mismatched signature. Anything it returns is genuine. The full handler, with the entitlement map and the six actions, is 45 lines in [`webhooks.ts`](https://github.com/elapsefinance/elapse/blob/master/examples/saas/src/webhooks.ts).
       </Tab>
       <Tab title="cURL">
         ```bash
@@ -125,7 +125,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
   <Card title="Webhooks catalog" icon="bell" href="/webhooks/events">
     The other five events and what to do with each.
   </Card>
-  <Card title="Clone the finished merchant" icon="github" href="https://github.com/furqaannabi/elapse/tree/master/examples/saas">
+  <Card title="Clone the finished merchant" icon="github" href="https://github.com/elapsefinance/elapse/tree/master/examples/saas">
     `examples/saas`: the code these snippets come from, with a fake product page and a demo check.
   </Card>
 </CardGroup>

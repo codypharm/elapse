@@ -192,6 +192,16 @@
   * {
     @apply border-border outline-ring/50;
   }
+  /* Tailwind v4's reset leaves buttons with the default arrow; anything pressable shows a hand (William, 2026-09-07). */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  label[for] {
+    cursor: pointer;
+  }
   html {
     @apply font-sans;
     text-rendering: optimizeLegibility;

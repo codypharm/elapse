@@ -19,12 +19,14 @@ import {
   useLoginWithOAuth,
   useLoginWithPasskey,
   getIdentityToken,
+  useIdentityToken,
   usePrivy,
   useWallets,
 } from "@privy-io/react-auth";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AuthFlowProvider, type AuthFlow, type AuthResult } from "../auth-flow";
 import { setIdentityTokenSource, setSubscriberWallet } from "../client";
+import { freshIdentityToken } from "./identity";
 import { monad, monadTestnet } from "./chains";
 import { subscriberWalletFrom } from "./wallet-adapter";
 
@@ -99,17 +101,23 @@ function PrivyAuthFlow({ children }: { children: ReactNode }) {
   const { user, authenticated, ready, getAccessToken } = usePrivy();
   const { wallets } = useWallets();
 
-  // FR-CHK-027: a fresh identity token per binding call. Refreshing the session first means a
-  // tab left open for an hour still proves who it is; `null` when nobody is signed in.
+  // FR-CHK-027: the identity token the SDK already holds, refreshed through Privy only when it is
+  // missing or about to expire (see identity.ts for why not `getIdentityToken()` every time).
+  const { identityToken } = useIdentityToken();
+  const heldRef = useRef(identityToken);
   useEffect(() => {
-    setIdentityTokenSource(async () => {
-      try {
-        await getAccessToken();
-      } catch {
-        /* not signed in or refresh failed: the identity token below is then null or stale */
-      }
-      return getIdentityToken();
-    });
+    heldRef.current = identityToken;
+  }, [identityToken]);
+  useEffect(() => {
+    setIdentityTokenSource(() =>
+      freshIdentityToken({
+        held: heldRef.current,
+        refresh: async () => {
+          await getAccessToken();
+          return heldRef.current ?? getIdentityToken();
+        },
+      }),
+    );
     return () => setIdentityTokenSource(null);
   }, [getAccessToken]);
   const { createWallet } = useCreateWallet();
