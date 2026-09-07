@@ -42,3 +42,4 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [The keeper gasses `settleBatch` from per-stream estimates, never from the batch estimate](./2026-09-07-keeper-gas-per-stream-estimate.md) | William |
 | 2026-09-07 | [The 13 October submission runs on Monad testnet; live mode points at testnet too; the relayer gets its own wallet now](./2026-09-07-submission-on-testnet-live-mode-mockusd.md) | William |
 | 2026-09-07 | [The submission ships `@elapse/sdk` (TypeScript) only; the Python package waits](./2026-09-07-sdk-typescript-only-for-submission.md) | William |
+| 2026-09-07 | [Forms hardening: rate read-only on edit, PNG-only logo in Postgres, type-to-confirm on live key revoke](./2026-09-07-forms-hardening-logo-png-revoke-confirm.md) | William |

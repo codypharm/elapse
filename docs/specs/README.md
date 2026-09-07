@@ -39,7 +39,7 @@ FRs are user-facing behaviour ("As a subscriber I can…"). BRs are constraints 
 | `meter-frd.md` | Built (retro-documented) | — |
 | `landing-frd.md` | Built (retro-documented) | — |
 | `checkout-frd.md` | **Signed** · built against the mock API · Surface 4 `/account` (FR-CHK-016–026) **signed 2026-09-04**, not yet built · FR-CHK-027 identity proof **signed and built 2026-09-07** | William, 2026-09-03 and 2026-09-04 |
-| `dashboard-frd.md` | **Signed** · built against the mock API (all FR-DSH except the subscriber `/account` which lives in the checkout spec) | William, 2026-09-03 |
+| `dashboard-frd.md` | **Signed** · built against the mock API (all FR-DSH except the subscriber `/account` which lives in the checkout spec) · FR-DSH-114–118 forms hardening **signed and built 2026-09-07** | William, 2026-09-03 |
 | `contracts-frd.md` | **Signed** · built and **deployed to Monad testnet 2026-09-05**; 51 tests + invariants green; kill gate FR-CON-073 passed on chain (indexer clause pending Week 3). Furqaan reviews money movement on arrival | William, 2026-09-05 |
 | `api-frd.md` | **Signed** · grilled 2026-09-05 · FR-API-120/125 and the FR-API-032 amendment (identity token) **signed and built 2026-09-07** | William, 2026-09-05 |
 | `indexer-frd.md` | **Signed** · Undecided 1–5 closed; FR-IDX-024/062 deferred to Week 4 | William, 2026-09-05 |
