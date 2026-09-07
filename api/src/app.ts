@@ -30,12 +30,13 @@ export const app = router();
 
 // Two browser clients: the hosted checkout (session id as the pass, decided 2026-09-05) and the
 // dashboard (HttpOnly cookie, so credentials must be allowed). Each origin is allowed only what it uses.
-const checkoutCors = cors({ origin: (o) => (o === checkoutOrigin() ? o : null), allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["content-type", "authorization"], maxAge: 600 });
+const checkoutCors = cors({ origin: (o) => (o === checkoutOrigin() ? o : null), allowMethods: ["GET", "POST", "OPTIONS"], allowHeaders: ["content-type", "authorization", "x-privy-token"], maxAge: 600 });
 const dashboardCors = cors({
   origin: (o) => (o === config.dashboardOrigin ? o : null),
   credentials: true,
   allowMethods: ["GET", "POST", "DELETE", "OPTIONS"],
-  allowHeaders: ["content-type", "authorization", "x-elapse-mode", "idempotency-key"],
+  // Superset of the checkout rule: a shared dev origin (both on localhost:3000) is answered by this one.
+  allowHeaders: ["content-type", "authorization", "x-elapse-mode", "idempotency-key", "x-privy-token"],
   maxAge: 600,
 });
 // The docs reference's try-it panel (FR-API-086): a test key from the browser is fine; a live key is not.

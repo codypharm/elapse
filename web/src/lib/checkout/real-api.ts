@@ -130,9 +130,21 @@ export interface RealApiOptions {
   wallet: () => SubscriberWallet | null;
   /** Extra headers for every call (the publishable key, once decided). */
   headers?: () => Record<string, string>;
+  /**
+   * A fresh Privy identity token (FR-CHK-027): sent as `X-Privy-Token` on the two binding
+   * calls, prepare and cancel/prepare. `null` when nobody is signed in.
+   */
+  identityToken?: () => Promise<string | null>;
   sleep?: (ms: number) => Promise<void>;
   /** How long start/cancel wait for the chain before giving up. */
   confirmTimeoutMs?: number;
+}
+
+/** The API refused the identity token; worth one silent refresh before asking the subscriber to sign in. */
+class StaleIdentity extends CheckoutApiError {
+  constructor() {
+    super("sign_in_required", "Sign in again.");
+  }
 }
 
 const NOT_AVAILABLE = (what: string) => new CheckoutApiError("invalid_state", `${what} is not available yet.`);
@@ -142,12 +154,12 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
   const timeout = o.confirmTimeoutMs ?? 90_000;
   const local = { signedIn: false, email: undefined as string | undefined };
 
-  async function call<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
+  async function call<T>(method: "GET" | "POST", path: string, body?: unknown, extra: Record<string, string> = {}): Promise<T> {
     let res: Response;
     try {
       res = await fetch(`${o.baseUrl}${path}`, {
         method,
-        headers: { ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(o.headers?.() ?? {}) },
+        headers: { ...(body !== undefined ? { "content-type": "application/json" } : {}), ...(o.headers?.() ?? {}), ...extra },
         body: body !== undefined ? JSON.stringify(body) : undefined,
       });
     } catch {
@@ -155,10 +167,33 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
     }
     const json = (await res.json().catch(() => null)) as { error?: { type?: string; code?: string; message?: string } } | null;
     if (!res.ok) {
-      const code = res.status === 404 ? "not_found" : res.status === 400 && json?.error?.code === "invalid_cap" ? "invalid_amount" : res.status >= 500 ? "network" : "invalid_state";
+      const serverCode = json?.error?.code;
+      if (res.status === 503 && serverCode === "subscriber_auth_unconfigured") throw new CheckoutApiError("unconfigured", "Checkout is not set up yet.");
+      if (res.status === 401 && serverCode === "subscriber_auth_invalid") throw new StaleIdentity();
+      if (res.status === 403 && serverCode === "subscriber_mismatch") throw new CheckoutApiError("sign_in_required", "Sign in again.");
+      const code = res.status === 404 ? "not_found" : res.status === 400 && serverCode === "invalid_cap" ? "invalid_amount" : res.status >= 500 ? "network" : "invalid_state";
       throw new CheckoutApiError(code, json?.error?.message ?? "Something went wrong.");
     }
     return json as T;
+  }
+
+  /**
+   * FR-CHK-027: a binding call carries a fresh identity token. On the first 401 the token is
+   * fetched again and the call retried once, silently; a second 401 (or a 403 mismatch)
+   * surfaces as `sign_in_required`, which the page answers with the sign-in sheet.
+   */
+  async function bindingCall<T>(path: string, body: unknown): Promise<T> {
+    const attempt = async () => {
+      const token = (await o.identityToken?.()) ?? null;
+      if (!token) throw new CheckoutApiError("sign_in_required", "Sign in again.");
+      return call<T>("POST", path, body, { "X-Privy-Token": token });
+    };
+    try {
+      return await attempt();
+    } catch (e) {
+      if (e instanceof StaleIdentity) return attempt();
+      throw e;
+    }
   }
 
   const getWire = (id: string) => call<WireSession>("GET", `/v1/checkout/sessions/${id}`);
@@ -193,8 +228,8 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
     },
 
     async setCap(id, seconds) {
-      const w = wallet();
-      await call("POST", `/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: seconds, wallet_address: w.address, ...(local.email ? { email: local.email } : {}) });
+      wallet(); // signed in, or "Sign in first." before any call goes out
+      await bindingCall(`/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: seconds });
       return session(id);
     },
 
@@ -204,7 +239,7 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       const cap = wire.subscription?.max_duration_seconds ?? wire.max_duration_seconds;
       if (!cap) throw new CheckoutApiError("invalid_state", "Choose how long first.");
       // Re-prepare right before signing so the permit nonce and deadline are fresh.
-      const prep = await call<{ permit: PermitPayload }>("POST", `/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: cap, wallet_address: w.address, ...(local.email ? { email: local.email } : {}) });
+      const prep = await bindingCall<{ permit: PermitPayload }>(`/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: cap });
       const signature = await w.signTypedData(prep.permit);
       await call("POST", `/v1/checkout/sessions/${id}/start`, { signature });
       return mapSession(await waitFor(id, (s) => s.subscription?.status === "active" || s.subscription?.status === "canceled"), local);
@@ -219,7 +254,7 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
 
     async cancel(id) {
       const w = wallet();
-      const auth = await call<{ message: `0x${string}`; deadline: string }>("POST", `/v1/checkout/sessions/${id}/cancel/prepare`, {});
+      const auth = await bindingCall<{ message: `0x${string}`; deadline: string }>(`/v1/checkout/sessions/${id}/cancel/prepare`, {});
       const signature = await w.signMessage(auth.message);
       await call("POST", `/v1/checkout/sessions/${id}/cancel`, { signature, deadline: auth.deadline });
       const done = await waitFor(id, (s) => s.subscription?.status === "canceled");

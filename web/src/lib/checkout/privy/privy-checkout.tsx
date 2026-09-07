@@ -18,12 +18,13 @@ import {
   useLoginWithEmail,
   useLoginWithOAuth,
   useLoginWithPasskey,
+  getIdentityToken,
   usePrivy,
   useWallets,
 } from "@privy-io/react-auth";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AuthFlowProvider, type AuthFlow, type AuthResult } from "../auth-flow";
-import { setSubscriberWallet } from "../client";
+import { setIdentityTokenSource, setSubscriberWallet } from "../client";
 import { monad, monadTestnet } from "./chains";
 import { subscriberWalletFrom } from "./wallet-adapter";
 
@@ -95,8 +96,22 @@ export function PrivyCheckout({ children }: { children: ReactNode }) {
 type Pending = { resolve: (r: AuthResult) => void; reject: (e: Error) => void; email?: string };
 
 function PrivyAuthFlow({ children }: { children: ReactNode }) {
-  const { user, authenticated, ready } = usePrivy();
+  const { user, authenticated, ready, getAccessToken } = usePrivy();
   const { wallets } = useWallets();
+
+  // FR-CHK-027: a fresh identity token per binding call. Refreshing the session first means a
+  // tab left open for an hour still proves who it is; `null` when nobody is signed in.
+  useEffect(() => {
+    setIdentityTokenSource(async () => {
+      try {
+        await getAccessToken();
+      } catch {
+        /* not signed in or refresh failed: the identity token below is then null or stale */
+      }
+      return getIdentityToken();
+    });
+    return () => setIdentityTokenSource(null);
+  }, [getAccessToken]);
   const { createWallet } = useCreateWallet();
   const pending = useRef<Pending | null>(null);
   // Read from the device flag, false on the server so hydration matches; writes notify through the store.

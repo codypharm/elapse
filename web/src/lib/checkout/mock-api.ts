@@ -78,7 +78,7 @@ export type JudgeData = {
 
 export class CheckoutApiError extends Error {
   constructor(
-    public code: "not_found" | "invalid_state" | "invalid_amount" | "network",
+    public code: "not_found" | "invalid_state" | "invalid_amount" | "network" | "sign_in_required" | "unconfigured",
     message: string,
   ) {
     super(message);

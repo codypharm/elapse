@@ -34,9 +34,11 @@ export type CheckoutErrorCode =
   | "already_started"
   | "bad_signature"
   | "permit_expired"
-  | "no_payout_address";
+  | "no_payout_address"
+  | "subscriber_mismatch"
+  | "insufficient_balance";
 
-/** Route layer maps: 409 for `already_started`/`session_not_open`/`not_running`, 400 otherwise. */
+/** Route layer maps: 409 for `already_started`/`session_not_open`/`not_running`, 403 for `subscriber_mismatch`, 400 otherwise. */
 export class CheckoutStateError extends Error {
   constructor(
     public readonly code: CheckoutErrorCode,
@@ -160,9 +162,13 @@ export async function startSession(input: { session: CheckoutSessionRow; signatu
   if (signer !== wallet.toLowerCase()) throw new CheckoutStateError("bad_signature", "The signature does not match the subscriber's wallet.");
 
   // Test mode: the relayer tops the wallet up with MockUSD so no one hunts for a faucet (Undecided 4).
-  if (!session.livemode) {
-    const balance = await chain.readBalance(chainId, token, wallet);
-    if (balance < maxEscrow) await chain.mintMock(chainId, token, wallet, maxEscrow);
+  // Live mode (FR-API-034): a wallet that cannot fund the cap is refused here, before any gas is spent.
+  const balance = await chain.readBalance(chainId, token, wallet);
+  if (balance < maxEscrow) {
+    if (session.livemode) {
+      throw new CheckoutStateError("insufficient_balance", `This meter needs $${usd(maxEscrow)} to start. Your balance is $${usd(balance)}.`);
+    }
+    await chain.mintMock(chainId, token, wallet, maxEscrow);
   }
 
   const { v, r, s } = splitSignature(input.signature);
@@ -189,8 +195,13 @@ async function runningSubscription(session: CheckoutSessionRow): Promise<Subscri
  * Step one of a subscriber cancel (FR-CON-017, checkout FR-CHK-008): the 32 bytes the wallet
  * signs with a personal-sign, bound to this stream, its current nonce and a 10-minute deadline.
  */
-export async function prepareCancel(input: { session: CheckoutSessionRow; now?: number }) {
+export async function prepareCancel(input: { session: CheckoutSessionRow; walletAddress: string; now?: number }) {
   const sub = await runningSubscription(input.session);
+  // FR-API-120: the identity token must belong to the Customer on this session (403 subscriber_mismatch).
+  const [customer] = await sql`SELECT wallet_address FROM customers WHERE id = ${sub.customer_id}`;
+  if ((customer!.wallet_address as string).toLowerCase() !== input.walletAddress.toLowerCase()) {
+    throw new CheckoutStateError("subscriber_mismatch", "Signed in as a different subscriber.");
+  }
   const now = input.now ?? Math.floor(Date.now() / 1000);
   const stream = sub.stream_address as Address;
   const nonce = await chainClient().readCancelNonce(sub.chain_id, stream);
@@ -234,4 +245,11 @@ export async function cancelAsKeeper(sub: SubscriptionRow): Promise<Hex> {
   const pendingTx = await chainClient().cancel(sub.chain_id, sub.stream_address as Address);
   await sql`UPDATE subscriptions SET updated_at = now() WHERE id = ${sub.id}`;
   return pendingTx;
+}
+
+/** Token base units → "14.40": two decimals for a sentence a subscriber reads (FR-API-034). */
+function usd(units: bigint): string {
+  const d = baseUnitsToDecimal(units, config.tokenDecimals);
+  const [whole, frac = ""] = d.split(".");
+  return `${whole}.${(frac + "00").slice(0, 2)}`;
 }

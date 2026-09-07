@@ -8,6 +8,7 @@ import { ApiError, invalid, notFound } from "../lib/errors";
 import { findSubscription, serializeSubscription, type SubscriptionRow } from "../db/subscriptions";
 import { findCustomer } from "../db/customers";
 import { RelayerUnavailable } from "../chain/relayer";
+import { SubscriberAuthError, SubscriberAuthUnconfigured, verifyIdentityToken, type SubscriberIdentity } from "../lib/privy";
 import { CheckoutStateError, prepareSession, startSession, prepareCancel, cancelSubscription, PERMIT_TTL_SECONDS, CANCEL_TTL_SECONDS } from "../services/checkout";
 import { PERMIT_TYPES } from "../chain/permit";
 import { baseUnitsToDecimal } from "../lib/money";
@@ -278,13 +279,22 @@ checkoutSessions.openapi(
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const SIGNATURE = /^0x[0-9a-fA-F]{130}$/;
 
-const PrepareBody = z
-  .strictObject({
-    max_duration_seconds: z.number().int().min(MIN_CAP).max(MAX_CAP),
-    wallet_address: z.string().regex(ADDRESS, "must be a 0x-prefixed 20-byte address"),
-    email: z.string().email().max(254).optional(),
-  })
-  .openapi("PrepareCheckoutSession");
+// The wallet and email come from the identity token (FR-API-120), never from the body.
+const PrepareBody = z.strictObject({ max_duration_seconds: z.number().int().min(MIN_CAP).max(MAX_CAP) }).openapi("PrepareCheckoutSession");
+
+/**
+ * FR-API-120 / FR-API-125: the subscriber's identity for a binding call, from `X-Privy-Token`.
+ * One 401 for every token problem; 503 when the API has no Privy app to check against.
+ */
+async function subscriberIdentity(c: { req: { header(name: string): string | undefined } }): Promise<SubscriberIdentity> {
+  try {
+    return await verifyIdentityToken(c.req.header("x-privy-token"));
+  } catch (e) {
+    if (e instanceof SubscriberAuthUnconfigured) throw new ApiError(503, "api_error", e.message, undefined, "subscriber_auth_unconfigured");
+    if (e instanceof SubscriberAuthError) throw new ApiError(401, "authentication_error", e.message, undefined, "subscriber_auth_invalid");
+    throw e;
+  }
+}
 
 const PermitSchema = z.object({
   domain: z.object({ name: z.string(), version: z.string(), chainId: z.number().int(), verifyingContract: z.string() }),
@@ -310,6 +320,7 @@ const StartResponse = z.object({ subscription: z.string(), pending_tx: z.string(
 /** Service errors → FR-API-082 shape. Conflicts are 409; a missing relayer is our fault (503). */
 function mapCheckoutError(e: unknown): never {
   if (e instanceof CheckoutStateError) {
+    if (e.code === "subscriber_mismatch") throw new ApiError(403, "authentication_error", e.message, undefined, e.code);
     const status = e.code === "already_started" || e.code === "session_not_open" || e.code === "not_running" ? 409 : 400;
     throw new ApiError(status, "invalid_request_error", e.message, undefined, e.code);
   }
@@ -348,8 +359,9 @@ checkoutSessions.openapi(
     const { id } = c.req.valid("param");
     const body = c.req.valid("json");
     const session = await loadSession(c.get("auth"), id);
+    const who = await subscriberIdentity(c);
     try {
-      const out = await prepareSession({ session, walletAddress: body.wallet_address, email: body.email ?? null, maxDurationSeconds: body.max_duration_seconds });
+      const out = await prepareSession({ session, walletAddress: who.walletAddress, email: who.email, maxDurationSeconds: body.max_duration_seconds });
       return c.json({ ...out, permit: { ...out.permit, types: PERMIT_TYPES as unknown as { Permit: { name: string; type: string }[] } } }, 200);
     } catch (e) {
       mapCheckoutError(e);
@@ -408,8 +420,9 @@ checkoutSessions.openapi(
   async (c) => {
     const { id } = c.req.valid("param");
     const session = await loadSession(c.get("auth"), id);
+    const who = await subscriberIdentity(c);
     try {
-      return c.json(await prepareCancel({ session }), 200);
+      return c.json(await prepareCancel({ session, walletAddress: who.walletAddress }), 200);
     } catch (e) {
       mapCheckoutError(e);
     }

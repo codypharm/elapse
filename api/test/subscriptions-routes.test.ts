@@ -3,17 +3,20 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { api, resetDb, seedMerchant, type Fixture } from "./helpers";
 import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
+import { privyFixture } from "./privy-fixture";
 import { STREAM, streamCreated, deposited, streamStarted, streamCanceled, settled, T0 } from "./ingest-fixtures";
 
 let m: Fixture;
 let chain: ReturnType<typeof fakeChain>;
 const subscriber = privateKeyToAccount(generatePrivateKey());
+let privy: Awaited<ReturnType<typeof privyFixture>>;
+const identity = async () => ({ "x-privy-token": await privy.token(subscriber.address) });
 const INGEST = { authorization: "Bearer ingest-test-token" };
 
 async function liveSubscription() {
   const p = await api("POST", "/v1/products", { key: m.skTest, body: { name: "GPU", rate_usd_per_second: "0.004" } });
   const s = await api("POST", "/v1/checkout/sessions", { key: m.skTest, body: { product: p.body.id, success_url: "https://x.test/ok", cancel_url: "https://x.test/no" } });
-  const prep = await api("POST", `/v1/checkout/sessions/${s.body.id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600, wallet_address: subscriber.address } });
+  const prep = await api("POST", `/v1/checkout/sessions/${s.body.id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: await identity() });
   const signature = await subscriber.signTypedData({ domain: prep.body.permit.domain, types: prep.body.permit.types, primaryType: "Permit", message: { owner: prep.body.permit.message.owner, spender: prep.body.permit.message.spender, value: BigInt(prep.body.permit.message.value), nonce: 0n, deadline: BigInt(prep.body.permit.message.deadline) } });
   const start = await api("POST", `/v1/checkout/sessions/${s.body.id}/start`, { key: m.pkTest, body: { signature } });
   const tx: string = start.body.pending_tx;
@@ -28,8 +31,13 @@ beforeEach(async () => {
   m = await seedMerchant();
   chain = fakeChain();
   setChainClient(chain.client);
+  privy = await privyFixture();
+  privy.use();
 });
-afterEach(() => setChainClient(null));
+afterEach(() => {
+  setChainClient(null);
+  privy.off();
+});
 
 describe("FR-API-041 retrieve", () => {
   it("FR_API_041_retrieve_returns_the_FR_API_040_object_and_404_across_merchants", async () => {

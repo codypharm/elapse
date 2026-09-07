@@ -27,7 +27,7 @@ const wireSub = (over: Record<string, unknown> = {}) => ({
   stream_address: null, chain_id: 10143, currency: "ausd", livemode: false, created: T0, ...over,
 });
 
-let calls: Array<{ method: string; url: string; body?: unknown }>;
+let calls: Array<{ method: string; url: string; body?: unknown; headers?: Record<string, string> }>;
 let responses: Array<unknown | ((c: { url: string; body?: unknown }) => unknown)>;
 const wallet: SubscriberWallet = {
   address: "0x2222222222222222222222222222222222222222",
@@ -36,11 +36,13 @@ const wallet: SubscriberWallet = {
 };
 
 beforeEach(() => {
+  tokens = [];
+  identityToken.mockClear();
   calls = [];
   responses = [];
   vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
-    calls.push({ method: init?.method ?? "GET", url: String(url), body });
+    calls.push({ method: init?.method ?? "GET", url: String(url), body, headers: Object.fromEntries(Object.entries((init?.headers as Record<string, string>) ?? {}).map(([k, v]) => [k.toLowerCase(), v])) });
     const next = responses.shift() ?? wireSession();
     const payload = typeof next === "function" ? (next as (c: { url: string; body?: unknown }) => unknown)({ url: String(url), body }) : next;
     const status = (payload as { __status?: number }).__status ?? 200;
@@ -49,7 +51,9 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
-const api = () => createRealCheckoutApi({ baseUrl: BASE, wallet: () => wallet, sleep: async () => {} });
+let tokens: (string | null)[];
+const identityToken = vi.fn(async () => (tokens.length ? tokens.shift()! : "tok_fresh"));
+const api = () => createRealCheckoutApi({ baseUrl: BASE, wallet: () => wallet, identityToken, sleep: async () => {} });
 
 describe("mapSession", () => {
   it("maps the public projection to the page's types", () => {
@@ -89,13 +93,17 @@ describe("real CheckoutApi", () => {
 
   it("setCap calls prepare with the wallet address and shows the pot as fundedUsd", async () => {
     const a = api();
+    tokens = ["tok_1"];
     await a.signIn("cs_abc", { email: "a@b.c" });
     responses = [
       { customer: "cus_1", subscription: "sub_1", chain_id: 10143, max_duration_seconds: 3600, max_escrow_usd: "14.4", permit: { domain: {}, types: {}, primaryType: "Permit", message: { owner: wallet.address, spender: "0xf", value: "14400000", nonce: "0", deadline: String(T0 + 600) } } },
       wireSession({ customer: { id: "cus_1", email: "a@b.c" }, subscription: wireSub() }),
     ];
     const s = await a.setCap("cs_abc", 3600);
-    expect(calls.find((c) => c.method === "POST")).toMatchObject({ url: `${BASE}/v1/checkout/sessions/cs_abc/prepare`, body: { max_duration_seconds: 3600, wallet_address: wallet.address, email: "a@b.c" } });
+    // FR-CHK-027: the identity token proves who is preparing; wallet and email are never in the body.
+    expect(calls.find((c) => c.method === "POST")).toMatchObject({ url: `${BASE}/v1/checkout/sessions/cs_abc/prepare`, body: { max_duration_seconds: 3600 }, headers: { "x-privy-token": "tok_1" } });
+    expect(calls.find((c) => c.method === "POST")!.body).not.toHaveProperty("wallet_address");
+    expect(calls.find((c) => c.method === "POST")!.body).not.toHaveProperty("email");
     expect(s.subscription).toMatchObject({ status: "incomplete", fundedUsd: "14.4", maxDurationSeconds: 3600 });
   });
 
@@ -143,5 +151,33 @@ describe("real CheckoutApi", () => {
     responses = [{ __status: 409, error: { type: "invalid_request_error", code: "already_started", message: "This session has already started." } }];
     await expect(api().start("cs_abc")).rejects.toMatchObject({ code: "invalid_state", message: "This session has already started." });
     await expect(api().pause("cs_abc")).rejects.toBeInstanceOf(CheckoutApiError);
+  });
+
+  it("FR-CHK-027: a stale token is refreshed and the call retried once; a second 401 or a 403 means sign in again; 503 means not set up", async () => {
+    const a = api();
+    await a.signIn("cs_abc", {});
+    const invalid = { __status: 401, error: { type: "authentication_error", code: "subscriber_auth_invalid", message: "Sign in again to continue." } };
+    tokens = ["tok_stale", "tok_fresh"];
+    responses = [invalid, { permit: {} }, wireSession({ subscription: wireSub() })];
+    await a.setCap("cs_abc", 3600);
+    const posts = calls.filter((c) => c.method === "POST");
+    expect(posts.map((c) => c.headers?.["x-privy-token"])).toEqual(["tok_stale", "tok_fresh"]);
+    expect(identityToken).toHaveBeenCalledTimes(2);
+
+    calls = [];
+    responses = [invalid, invalid];
+    await expect(a.setCap("cs_abc", 3600)).rejects.toMatchObject({ code: "sign_in_required", message: "Sign in again." });
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(2);
+
+    calls = [];
+    responses = [{ __status: 403, error: { type: "authentication_error", code: "subscriber_mismatch", message: "Signed in as a different subscriber." } }];
+    await expect(a.setCap("cs_abc", 3600)).rejects.toMatchObject({ code: "sign_in_required" });
+    expect(calls.filter((c) => c.method === "POST")).toHaveLength(1);
+
+    responses = [{ __status: 503, error: { type: "api_error", code: "subscriber_auth_unconfigured", message: "set PRIVY_APP_ID" } }];
+    await expect(a.setCap("cs_abc", 3600)).rejects.toMatchObject({ code: "unconfigured", message: "Checkout is not set up yet." });
+
+    tokens = [null];
+    await expect(a.setCap("cs_abc", 3600)).rejects.toMatchObject({ code: "sign_in_required" });
   });
 });

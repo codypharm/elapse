@@ -27,7 +27,7 @@ import {
   type Receipt as ReceiptData,
 } from "@/lib/checkout/mock-api";
 import type { CheckoutSession, CheckoutView } from "@/lib/checkout/types";
-import { deriveView } from "@/lib/checkout/view";
+import { afterError, deriveView } from "@/lib/checkout/view";
 import { formatUsd, parseRate } from "@/lib/meter/math";
 import { capEndsAt, formatCap, parseUsd } from "@/lib/checkout/funding";
 import { CheckoutFrame } from "./checkout-frame";
@@ -104,7 +104,9 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         const session = await fn();
         setLoad({ status: "ready", session });
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Something went wrong");
+        const next = afterError(e);
+        toast.error(next.message);
+        if (next.openSignIn) setAuthOpen(true);
       } finally {
         setBusy(false);
       }
@@ -281,7 +283,9 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
                 setReceipt(r.receipt);
                 setLoad({ status: "ready", session: r.session });
               } catch (e) {
-                toast.error(e instanceof Error ? e.message : "Could not stop the meter");
+                const next = afterError(e);
+                toast.error(next.message);
+                if (next.openSignIn) setAuthOpen(true);
               } finally {
                 setBusy(false);
               }

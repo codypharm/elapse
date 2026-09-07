@@ -8,6 +8,7 @@ import { findSubscription } from "../src/db/subscriptions";
 import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
 import { prepareSession, startSession, CheckoutStateError } from "../src/services/checkout";
+import { config } from "../src/config";
 import { deploymentFor } from "../src/chain/deployments";
 
 let m: Fixture;
@@ -15,9 +16,9 @@ let chain: ReturnType<typeof fakeChain>;
 const subscriber = privateKeyToAccount(generatePrivateKey()); // throwaway wallet, test-only
 const NOW = 1_757_000_000;
 
-async function openSession(maxDurationSeconds: number | null = null) {
-  const product = await insertProduct({ merchantId: m.merchantId, livemode: false, name: "GPU", description: null, rateUsdPerSecond: "0.004", ratePerSecondWei: 4000n, allowPause: true });
-  return insertCheckoutSession({ merchantId: m.merchantId, livemode: false, productId: product.id, successUrl: "https://x.test/ok", cancelUrl: "https://x.test/no", maxDurationSeconds, ttlSeconds: 3600 });
+async function openSession(maxDurationSeconds: number | null = null, livemode = false) {
+  const product = await insertProduct({ merchantId: m.merchantId, livemode, name: "GPU", description: null, rateUsdPerSecond: "0.004", ratePerSecondWei: 4000n, allowPause: true });
+  return insertCheckoutSession({ merchantId: m.merchantId, livemode, productId: product.id, successUrl: "https://x.test/ok", cancelUrl: "https://x.test/no", maxDurationSeconds, ttlSeconds: 3600 });
 }
 
 beforeEach(async () => {
@@ -75,8 +76,8 @@ describe("FR-API-032 prepare", () => {
 });
 
 describe("FR-API-032 start", () => {
-  async function prepared(maxDuration = 3600) {
-    const session = await openSession();
+  async function prepared(maxDuration = 3600, livemode = false) {
+    const session = await openSession(null, livemode);
     const out = await prepareSession({ session, walletAddress: subscriber.address, email: null, maxDurationSeconds: maxDuration, now: NOW });
     const signature = await subscriber.signTypedData({
       domain: out.permit.domain,
@@ -84,7 +85,7 @@ describe("FR-API-032 start", () => {
       primaryType: "Permit",
       message: { owner: subscriber.address, spender: out.permit.message.spender, value: BigInt(out.permit.message.value), nonce: BigInt(out.permit.message.nonce), deadline: BigInt(out.permit.message.deadline) },
     });
-    return { session: (await findCheckoutSession(m.merchantId, false, session.id))!, out, signature };
+    return { session: (await findCheckoutSession(m.merchantId, livemode, session.id))!, out, signature };
   }
 
   it("FR_API_032_start_mints_in_test_mode_submits_createWithPermit_and_stores_pending_tx", async () => {
@@ -105,6 +106,31 @@ describe("FR-API-032 start", () => {
     const { session, signature } = await prepared();
     await startSession({ session, signature, now: NOW });
     expect(chain.mints).toEqual([]);
+  });
+
+  it("FR_API_034_a_live_start_the_wallet_cannot_fund_is_refused_before_any_transaction", async () => {
+    // No mainnet record exists yet, so live mode resolves the testnet deployment for this test only.
+    const chains = config.chains as { live: number };
+    const live = chains.live;
+    chains.live = 10143;
+    try {
+      chain.balances.set(subscriber.address.toLowerCase(), 3_100_000n);
+      const { session, signature } = await prepared(3600, true);
+      const err = await startSession({ session, signature, now: NOW }).catch((e: unknown) => e);
+      expect(err).toBeInstanceOf(CheckoutStateError);
+      expect((err as CheckoutStateError).code).toBe("insufficient_balance");
+      expect((err as Error).message).toBe("This meter needs $14.40 to start. Your balance is $3.10.");
+      expect(chain.mints).toEqual([]);
+      expect(chain.creates).toEqual([]);
+      // exactly enough starts
+      chain.balances.set(subscriber.address.toLowerCase(), 14_400_000n);
+      const again = await prepared(3600, true);
+      await startSession({ session: again.session, signature: again.signature, now: NOW });
+      expect(chain.creates).toHaveLength(1);
+      expect(chain.mints).toEqual([]);
+    } finally {
+      chains.live = live;
+    }
   });
 
   it("FR_API_032_a_signature_from_another_wallet_is_400", async () => {

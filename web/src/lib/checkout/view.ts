@@ -14,6 +14,7 @@
  */
 import { elapsedMs, parseRate } from "@/lib/meter/math";
 import { isLowBalance, parseUsd, remainingRuntimeMs } from "./funding";
+import { CheckoutApiError } from "./mock-api";
 import type { CheckoutSession, CheckoutView } from "./types";
 
 export function deriveView(session: CheckoutSession, now: number): CheckoutView {
@@ -42,4 +43,14 @@ export function deriveView(session: CheckoutSession, now: number): CheckoutView 
   if (remaining <= 0) return "canceled";
   if (isLowBalance(remaining)) return "low_balance";
   return "running";
+}
+
+/**
+ * FR-CHK-027: what the page does after a failed action. `sign_in_required` (a stale or
+ * mismatched identity) reopens the sign-in sheet with "Sign in again."; every other error is
+ * a toast with the API's own sentence, and nothing on the page names a chain.
+ */
+export function afterError(e: unknown): { message: string; openSignIn: boolean } {
+  const message = e instanceof Error ? e.message : "Something went wrong";
+  return { message, openSignIn: e instanceof CheckoutApiError && e.code === "sign_in_required" };
 }

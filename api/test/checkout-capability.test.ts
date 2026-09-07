@@ -3,16 +3,19 @@ import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { api, resetDb, seedMerchant, type Fixture } from "./helpers";
 import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
+import { privyFixture } from "./privy-fixture";
 import { streamCreated, deposited, streamStarted } from "./ingest-fixtures";
 import { app } from "../src/app";
 
 /** Decided 2026-09-05 (William, option a): the hosted page sends no key; the session id is the pass, from the checkout origin only. */
 const ORIGIN = "http://localhost:3000";
-const page = (method: string, path: string, body?: unknown) => api(method, path, { body, headers: { origin: ORIGIN } });
+const page = (method: string, path: string, body?: unknown, headers: Record<string, string> = {}) => api(method, path, { body, headers: { origin: ORIGIN, ...headers } });
 
 let m: Fixture;
 let chain: ReturnType<typeof fakeChain>;
 const subscriber = privateKeyToAccount(generatePrivateKey());
+let privy: Awaited<ReturnType<typeof privyFixture>>;
+const identity = async () => ({ "x-privy-token": await privy.token(subscriber.address) });
 
 async function newSession() {
   const p = await api("POST", "/v1/products", { key: m.skTest, body: { name: "GPU", rate_usd_per_second: "0.004" } });
@@ -25,8 +28,13 @@ beforeEach(async () => {
   m = await seedMerchant();
   chain = fakeChain();
   setChainClient(chain.client);
+  privy = await privyFixture();
+  privy.use();
 });
-afterEach(() => setChainClient(null));
+afterEach(() => {
+  setChainClient(null);
+  privy.off();
+});
 
 describe("hosted checkout capability auth", () => {
   it("the page reads and drives a session with no key from the checkout origin", async () => {
@@ -35,7 +43,7 @@ describe("hosted checkout capability auth", () => {
     expect(get.status).toBe(200);
     expect(get.body.customer).toBeNull(); // public projection, not the sk_ object
     expect(get.body).not.toHaveProperty("url");
-    const prep = await page("POST", `/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: 600, wallet_address: subscriber.address });
+    const prep = await page("POST", `/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: 600 }, await identity());
     expect(prep.status).toBe(200);
     const signature = await subscriber.signTypedData({ domain: prep.body.permit.domain, types: prep.body.permit.types, primaryType: "Permit", message: { owner: prep.body.permit.message.owner, spender: prep.body.permit.message.spender, value: BigInt(prep.body.permit.message.value), nonce: 0n, deadline: BigInt(prep.body.permit.message.deadline) } });
     const start = await page("POST", `/v1/checkout/sessions/${id}/start`, { signature });
@@ -46,7 +54,7 @@ describe("hosted checkout capability auth", () => {
     const id = await newSession();
     expect((await api("GET", `/v1/checkout/sessions/${id}`)).status).toBe(401);
     expect((await api("GET", `/v1/checkout/sessions/${id}`, { headers: { origin: "https://evil.example" } })).status).toBe(401);
-    expect((await api("POST", `/v1/checkout/sessions/${id}/prepare`, { body: { max_duration_seconds: 600, wallet_address: subscriber.address }, headers: { origin: "https://evil.example" } })).status).toBe(401);
+    expect((await api("POST", `/v1/checkout/sessions/${id}/prepare`, { body: { max_duration_seconds: 600 }, headers: { origin: "https://evil.example", ...(await identity()) } })).status).toBe(401);
   });
 
   it("an unknown session id is 404 and merchant routes stay closed to the page", async () => {
@@ -57,9 +65,11 @@ describe("hosted checkout capability auth", () => {
   });
 
   it("CORS preflight from the checkout origin is answered; other origins are not", async () => {
-    const ok = await app.request("/v1/checkout/sessions/cs_x/prepare", { method: "OPTIONS", headers: { origin: ORIGIN, "access-control-request-method": "POST", "access-control-request-headers": "content-type" } });
+    // FR-CHK-027: the page's preflight now names X-Privy-Token; a CORS rule that omits it makes the browser drop the call before the API sees it.
+    const ok = await app.request("/v1/checkout/sessions/cs_x/prepare", { method: "OPTIONS", headers: { origin: ORIGIN, "access-control-request-method": "POST", "access-control-request-headers": "content-type, x-privy-token" } });
     expect(ok.headers.get("access-control-allow-origin")).toBe(ORIGIN);
     expect(ok.headers.get("access-control-allow-methods")).toContain("POST");
+    expect(ok.headers.get("access-control-allow-headers")?.toLowerCase()).toContain("x-privy-token");
     const bad = await app.request("/v1/checkout/sessions/cs_x/prepare", { method: "OPTIONS", headers: { origin: "https://evil.example", "access-control-request-method": "POST" } });
     expect(bad.headers.get("access-control-allow-origin")).toBeNull();
     const status = await app.request("/v1/status", { headers: { origin: ORIGIN } });
@@ -69,7 +79,7 @@ describe("hosted checkout capability auth", () => {
   it("judge mode reads the session's delivery log without a key and without endpoint URLs", async () => {
     const id = await newSession();
     await api("POST", "/v1/webhook_endpoints", { key: m.skTest, body: { url: "https://merchant.example/secret-path", events: ["*"] } });
-    const prep = await page("POST", `/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: 600, wallet_address: subscriber.address });
+    const prep = await page("POST", `/v1/checkout/sessions/${id}/prepare`, { max_duration_seconds: 600 }, await identity());
     const signature = await subscriber.signTypedData({ domain: prep.body.permit.domain, types: prep.body.permit.types, primaryType: "Permit", message: { owner: prep.body.permit.message.owner, spender: prep.body.permit.message.spender, value: BigInt(prep.body.permit.message.value), nonce: 0n, deadline: BigInt(prep.body.permit.message.deadline) } });
     const start = await page("POST", `/v1/checkout/sessions/${id}/start`, { signature });
     const tx: string = start.body.pending_tx;

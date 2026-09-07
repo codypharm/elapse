@@ -4,10 +4,14 @@ import { api, resetDb, seedMerchant, type Fixture } from "./helpers";
 import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
 import { streamStarted, log } from "./ingest-fixtures";
+import { privyFixture } from "./privy-fixture";
 
 let m: Fixture;
 let chain: ReturnType<typeof fakeChain>;
+let privy: Awaited<ReturnType<typeof privyFixture>>;
 const subscriber = privateKeyToAccount(generatePrivateKey());
+/** The page's identity proof (FR-API-120): a fresh token for the subscriber on each binding call. */
+const identity = async (wallet = subscriber.address, o: Parameters<typeof privy.token>[1] = {}) => ({ "x-privy-token": await privy.token(wallet, o) });
 
 async function newSession(extra: Record<string, unknown> = {}) {
   const p = await api("POST", "/v1/products", { key: m.skTest, body: { name: "GPU", rate_usd_per_second: "0.004" } });
@@ -27,24 +31,59 @@ beforeEach(async () => {
   m = await seedMerchant();
   chain = fakeChain();
   setChainClient(chain.client);
+  privy = await privyFixture();
+  privy.use();
 });
-afterEach(() => setChainClient(null));
+afterEach(() => {
+  setChainClient(null);
+  privy.off();
+});
+
+describe("FR-API-120 / FR-API-125 prepare needs the subscriber's identity token", () => {
+  it("FR_API_120_prepare_without_a_token_is_401_and_with_one_the_customer_is_the_token_wallet", async () => {
+    const id = await newSession();
+    const none = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 } });
+    expect(none.status).toBe(401);
+    expect(none.body.error).toMatchObject({ type: "authentication_error", code: "subscriber_auth_invalid" });
+    const forged = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: { "x-privy-token": "eyJ.eyJ.sig" } });
+    expect(forged.status).toBe(401);
+    expect(forged.body.error.code).toBe("subscriber_auth_invalid");
+    const ok = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: await identity(subscriber.address, { email: "s@example.com" }) });
+    expect(ok.status).toBe(200);
+    expect(ok.body.permit.message.owner.toLowerCase()).toBe(subscriber.address.toLowerCase());
+    const session = await api("GET", `/v1/checkout/sessions/${id}`, { key: m.pkTest });
+    expect(session.body.customer.email).toBe("s@example.com");
+    // the page can no longer name a wallet or an email
+    const named = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600, wallet_address: subscriber.address }, headers: await identity() });
+    expect(named.status).toBe(400);
+  });
+
+  it("FR_API_125_unconfigured_privy_is_503_on_prepare_and_nothing_else", async () => {
+    privy.off();
+    const id = await newSession();
+    const r = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: await identity() });
+    expect(r.status).toBe(503);
+    expect(r.body.error).toMatchObject({ type: "api_error", code: "subscriber_auth_unconfigured" });
+    expect(r.body.error.message).toContain("PRIVY_APP_ID");
+    expect((await api("GET", `/v1/checkout/sessions/${id}`, { key: m.pkTest })).status).toBe(200);
+  });
+});
 
 describe("FR-API-032 routes", () => {
   it("FR_API_032_prepare_needs_a_publishable_key_and_validates_the_body", async () => {
     const id = await newSession();
-    expect((await api("POST", `/v1/checkout/sessions/${id}/prepare`, { body: { max_duration_seconds: 60, wallet_address: subscriber.address } })).status).toBe(401);
-    const bad = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 60, wallet_address: "nope" } });
+    expect((await api("POST", `/v1/checkout/sessions/${id}/prepare`, { body: { max_duration_seconds: 60 }, headers: await identity() })).status).toBe(401);
+    const bad = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: "60" }, headers: await identity() });
     expect(bad.status).toBe(400);
-    expect(bad.body.error.param).toBe("wallet_address");
-    const short = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 5, wallet_address: subscriber.address } });
+    expect(bad.body.error.param).toBe("max_duration_seconds");
+    const short = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 5 }, headers: await identity() });
     expect(short.status).toBe(400);
     expect(short.body.error.param).toBe("max_duration_seconds");
   });
 
   it("FR_API_032_prepare_then_start_returns_202_with_pending_tx_and_the_session_shows_the_subscription", async () => {
     const id = await newSession();
-    const prep = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600, wallet_address: subscriber.address, email: "s@example.com" } });
+    const prep = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: await identity(subscriber.address, { email: "s@example.com" }) });
     expect(prep.status).toBe(200);
     expect(prep.body).toMatchObject({ chain_id: 10143, max_escrow_usd: "14.4", max_duration_seconds: 3600 });
     expect(prep.body.permit.message.value).toBe("14400000");
@@ -77,14 +116,14 @@ describe("FR-API-032 routes", () => {
 
   it("FR_API_032_error_codes_map_to_400_and_409", async () => {
     const id = await newSession({ max_duration_seconds: 900 });
-    const fixed = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600, wallet_address: subscriber.address } });
+    const fixed = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: await identity() });
     expect(fixed.status).toBe(400);
     expect(fixed.body.error.code).toBe("cap_fixed");
     const notPrepared = await api("POST", `/v1/checkout/sessions/${id}/start`, { key: m.pkTest, body: { signature: "0x" + "11".repeat(65) } });
     expect(notPrepared.status).toBe(400);
     expect(notPrepared.body.error.code).toBe("not_prepared");
 
-    const prep = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 900, wallet_address: subscriber.address } });
+    const prep = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 900 }, headers: await identity() });
     const other = privateKeyToAccount(generatePrivateKey());
     const wrong = await other.signTypedData({ domain: prep.body.permit.domain, types: prep.body.permit.types, primaryType: "Permit", message: { owner: prep.body.permit.message.owner, spender: prep.body.permit.message.spender, value: 3_600_000n, nonce: 0n, deadline: BigInt(prep.body.permit.message.deadline) } });
     const bad = await api("POST", `/v1/checkout/sessions/${id}/start`, { key: m.pkTest, body: { signature: wrong } });
@@ -96,21 +135,21 @@ describe("FR-API-032 routes", () => {
     const again = await api("POST", `/v1/checkout/sessions/${id}/start`, { key: m.pkTest, body: { signature: await signPermit(prep.body.permit) } });
     expect(again.status).toBe(409);
     expect(again.body.error.code).toBe("already_started");
-    const reprep = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 900, wallet_address: subscriber.address } });
+    const reprep = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 900 }, headers: await identity() });
     expect(reprep.status).toBe(409);
   });
 
   it("FR_API_032_a_session_of_another_merchant_is_404", async () => {
     const id = await newSession();
     const other = await seedMerchant();
-    const r = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: other.pkTest, body: { max_duration_seconds: 60, wallet_address: subscriber.address } });
+    const r = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: other.pkTest, body: { max_duration_seconds: 60 }, headers: await identity() });
     expect(r.status).toBe(404);
   });
 
   it("FR_API_032_start_without_a_relayer_is_503_api_error", async () => {
     setChainClient(null);
     const id = await newSession();
-    const r = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 60, wallet_address: subscriber.address } });
+    const r = await api("POST", `/v1/checkout/sessions/${id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 60 }, headers: await identity() });
     expect(r.status).toBe(503);
     expect(r.body.error.type).toBe("api_error");
   });

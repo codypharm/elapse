@@ -14,10 +14,15 @@ const API_URL = process.env.NEXT_PUBLIC_ELAPSE_API_URL;
 let mock: CheckoutApi | null = null;
 let real: CheckoutApi | null = null;
 let wallet: SubscriberWallet | null = null;
+let identityToken: (() => Promise<string | null>) | null = null;
 
 /** Set by the Privy layer once the subscriber has signed in; the page never touches it. */
 export function setSubscriberWallet(w: SubscriberWallet | null): void {
   wallet = w;
+}
+/** Set by the Privy layer: how to get a fresh identity token for a binding call (FR-CHK-027). */
+export function setIdentityTokenSource(fn: (() => Promise<string | null>) | null): void {
+  identityToken = fn;
 }
 export function hasSubscriberWallet(): boolean {
   return wallet !== null;
@@ -33,7 +38,7 @@ export function usesRealApi(id: string): boolean {
 
 export function getCheckoutApi(sessionId?: string): CheckoutApi {
   if (sessionId && usesRealApi(sessionId)) {
-    if (!real) real = createRealCheckoutApi({ baseUrl: API_URL!, wallet: () => wallet });
+    if (!real) real = createRealCheckoutApi({ baseUrl: API_URL!, wallet: () => wallet, identityToken: () => identityToken?.() ?? Promise.resolve(null) });
     return real;
   }
   if (!mock) mock = createMockCheckoutApi();

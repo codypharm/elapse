@@ -146,3 +146,14 @@ describe("deriveView with the real API's session states", () => {
     expect(deriveView({ ...session, subscription: null }, now)).toBe("used");
   });
 });
+
+describe("FR-CHK-027 afterError: what the page does with a failed action", () => {
+  it("sign_in_required opens the sign-in sheet with 'Sign in again'; unconfigured and others only toast", async () => {
+    const { afterError } = await import("./view");
+    const { CheckoutApiError } = await import("./mock-api");
+    expect(afterError(new CheckoutApiError("sign_in_required", "Sign in again."))).toEqual({ message: "Sign in again.", openSignIn: true });
+    expect(afterError(new CheckoutApiError("unconfigured", "Checkout is not set up yet."))).toEqual({ message: "Checkout is not set up yet.", openSignIn: false });
+    expect(afterError(new CheckoutApiError("invalid_state", "Choose how long first."))).toEqual({ message: "Choose how long first.", openSignIn: false });
+    expect(afterError("boom")).toEqual({ message: "Something went wrong", openSignIn: false });
+  });
+});

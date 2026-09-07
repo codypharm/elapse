@@ -20,6 +20,9 @@ export const config = {
   publicApiUrl: (process.env.PUBLIC_API_URL ?? "http://localhost:4000").replace(/\/+$/, ""),
   /** The docs site, whose API reference calls public routes from the browser with a test key (FR-API-086). Unset = no CORS. */
   docsOrigin: (process.env.DOCS_ORIGIN ?? "").replace(/\/+$/, ""),
+  /** Privy app for subscriber identity tokens (FR-API-120); both unset = prepare answers 503 (FR-API-125). The key is PEM, possibly with literal \n. */
+  privyAppId: process.env.PRIVY_APP_ID ?? "",
+  privyVerificationKey: (process.env.PRIVY_VERIFICATION_KEY ?? "").replace(/\\n/g, "\n"),
   /** Where merchants reach this API; goes into the public OpenAPI file's `servers` (FR-API-085). */
   /** Shared secret the indexer presents on `POST /internal/ingest` (FR-API-070). Unset = route refuses everything. */
   ingestToken: process.env.INGEST_TOKEN ?? "",

@@ -6,17 +6,20 @@ import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
 import { cancelInnerHash } from "../src/chain/cancel-auth";
 import { STREAM, streamCreated, deposited, streamStarted, txHash } from "./ingest-fixtures";
+import { privyFixture } from "./privy-fixture";
 
 let m: Fixture;
 let chain: ReturnType<typeof fakeChain>;
 const subscriber = privateKeyToAccount(generatePrivateKey());
+let privy: Awaited<ReturnType<typeof privyFixture>>;
+const identity = async (wallet = subscriber.address) => ({ "x-privy-token": await privy.token(wallet) });
 const INGEST = { authorization: "Bearer ingest-test-token" };
 
 /** A session whose stream is live on chain (fake): prepare, start, then ingest the start logs. */
 async function liveSession() {
   const p = await api("POST", "/v1/products", { key: m.skTest, body: { name: "GPU", rate_usd_per_second: "0.004" } });
   const s = await api("POST", "/v1/checkout/sessions", { key: m.skTest, body: { product: p.body.id, success_url: "https://x.test/ok", cancel_url: "https://x.test/no" } });
-  const prep = await api("POST", `/v1/checkout/sessions/${s.body.id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600, wallet_address: subscriber.address } });
+  const prep = await api("POST", `/v1/checkout/sessions/${s.body.id}/prepare`, { key: m.pkTest, body: { max_duration_seconds: 3600 }, headers: await identity() });
   const signature = await subscriber.signTypedData({ domain: prep.body.permit.domain, types: prep.body.permit.types, primaryType: "Permit", message: { owner: prep.body.permit.message.owner, spender: prep.body.permit.message.spender, value: BigInt(prep.body.permit.message.value), nonce: 0n, deadline: BigInt(prep.body.permit.message.deadline) } });
   const start = await api("POST", `/v1/checkout/sessions/${s.body.id}/start`, { key: m.pkTest, body: { signature } });
   const tx: string = start.body.pending_tx;
@@ -31,8 +34,13 @@ beforeEach(async () => {
   m = await seedMerchant();
   chain = fakeChain();
   setChainClient(chain.client);
+  privy = await privyFixture();
+  privy.use();
 });
-afterEach(() => setChainClient(null));
+afterEach(() => {
+  setChainClient(null);
+  privy.off();
+});
 
 describe("FR-CON-017 cancel authorisation digest", () => {
   it("FR_CON_017_inner_hash_matches_abi_encode_of_ElapseCancel_chainid_stream_nonce_deadline", () => {
@@ -51,7 +59,7 @@ describe("FR-API-032 subscriber cancel through the session", () => {
   it("FR_CHK_008_cancel_prepare_returns_the_message_then_cancel_submits_cancelFor", async () => {
     const { sessionId, subId } = await liveSession();
     chain.setCancelNonce(STREAM, 0n);
-    const prep = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {} });
+    const prep = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {}, headers: await identity() });
     expect(prep.status).toBe(200);
     expect(prep.body).toMatchObject({ subscription: subId, stream_address: STREAM, chain_id: 10143, nonce: "0" });
     expect(prep.body.message).toMatch(/^0x[0-9a-f]{64}$/);
@@ -69,7 +77,7 @@ describe("FR-API-032 subscriber cancel through the session", () => {
 
   it("FR_API_032_a_cancel_signature_from_a_stranger_is_400_and_never_reaches_the_chain", async () => {
     const { sessionId } = await liveSession();
-    const prep = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {} });
+    const prep = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {}, headers: await identity() });
     const stranger = privateKeyToAccount(generatePrivateKey());
     const signature = await stranger.signMessage({ message: { raw: prep.body.message } });
     const res = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel`, { key: m.pkTest, body: { signature, deadline: prep.body.deadline } });
@@ -78,10 +86,22 @@ describe("FR-API-032 subscriber cancel through the session", () => {
     expect(chain.cancels).toHaveLength(0);
   });
 
+  it("FR_API_120_cancel_prepare_with_another_subscribers_token_is_403_and_without_one_401", async () => {
+    const { sessionId } = await liveSession();
+    chain.setCancelNonce(STREAM, 0n);
+    const other = privateKeyToAccount(generatePrivateKey());
+    const r = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {}, headers: await identity(other.address) });
+    expect(r.status).toBe(403);
+    expect(r.body.error).toMatchObject({ type: "authentication_error", code: "subscriber_mismatch" });
+    const none = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {} });
+    expect(none.status).toBe(401);
+    expect(none.body.error.code).toBe("subscriber_auth_invalid");
+  });
+
   it("FR_API_032_cancel_before_the_stream_is_active_is_409", async () => {
     const p = await api("POST", "/v1/products", { key: m.skTest, body: { name: "GPU", rate_usd_per_second: "0.004" } });
     const s = await api("POST", "/v1/checkout/sessions", { key: m.skTest, body: { product: p.body.id, success_url: "https://x.test/ok", cancel_url: "https://x.test/no" } });
-    const r = await api("POST", `/v1/checkout/sessions/${s.body.id}/cancel/prepare`, { key: m.pkTest, body: {} });
+    const r = await api("POST", `/v1/checkout/sessions/${s.body.id}/cancel/prepare`, { key: m.pkTest, body: {}, headers: await identity() });
     expect(r.status).toBe(409);
     expect(r.body.error.code).toBe("not_running");
   });
