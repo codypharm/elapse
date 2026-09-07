@@ -78,7 +78,7 @@ export function Receipt({
       </div>
 
       <div className="mt-auto flex flex-col gap-2 pt-2">
-        {cappedOut && onStartAgain && (
+        {onStartAgain && (
           <Button
             size="lg"
             variant="outline"

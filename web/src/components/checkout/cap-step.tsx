@@ -26,12 +26,15 @@ import { cn } from "@/lib/utils";
 export function CapStep({
   rateUsdPerSecond,
   availableUsd,
+  initialSeconds,
   busy,
   onChoose,
 }: {
   rateUsdPerSecond: string;
   /** What the subscriber can spend, USD decimal string. Omit when unknown. */
   availableUsd?: string;
+  /** A cap to preselect, e.g. the last one after Start again (FR-CHK-007): a preset when it matches, else the custom minutes. */
+  initialSeconds?: number;
   busy?: boolean;
   /** Called with the chosen cap in seconds. */
   onChoose: (seconds: number) => void;
@@ -44,10 +47,11 @@ export function CapStep({
   const affordable = (seconds: number) =>
     available === null || maxEscrowNano(seconds, rate) <= available;
 
+  const preset = initialSeconds !== undefined && (CAP_PRESETS_SECONDS as readonly number[]).includes(initialSeconds) ? initialSeconds : null;
   const [choice, setChoice] = useState<number | "custom">(
-    CAP_PRESETS_SECONDS.find(affordable) ?? CAP_PRESETS_SECONDS[0],
+    preset ?? (initialSeconds !== undefined && initialSeconds % 60 === 0 ? "custom" : (CAP_PRESETS_SECONDS.find(affordable) ?? CAP_PRESETS_SECONDS[0])),
   );
-  const [minutes, setMinutes] = useState("");
+  const [minutes, setMinutes] = useState(preset === null && initialSeconds !== undefined && initialSeconds % 60 === 0 ? String(initialSeconds / 60) : "");
   const custom = choice === "custom";
 
   // FR-CHK-028: whole minutes within the server's bounds (60 s to 30 days), shown as typed.

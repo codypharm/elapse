@@ -63,10 +63,10 @@ describe("Receipt", () => {
     expect(onStartAgain).toHaveBeenCalled();
   });
 
-  it("does not say the cap is up when the subscriber stopped it", () => {
+  it("does not say the cap is up when the subscriber stopped it (Start again stays, decided 2026-09-07)", () => {
     render(<Receipt {...props} receipt={receipt()} maxDurationSeconds={3600} onStartAgain={vi.fn()} />);
     expect(screen.queryByText(/is up/i)).toBeNull();
-    expect(screen.queryByRole("button", { name: /start again/i })).toBeNull();
+    expect(screen.getByRole("button", { name: /start again/i })).toBeInTheDocument();
   });
 
   it("links to the account page so the subscriber can find their meters (FR-CHK-017)", () => {
@@ -91,5 +91,13 @@ describe("Receipt", () => {
   it("FR_CHK_029_without_an_email_handler_no_email_button_is_offered", () => {
     render(<Receipt {...props} receipt={receipt()} onEmail={undefined} />);
     expect(screen.queryByRole("button", { name: /email receipt|sent to/i })).toBeNull();
+  });
+
+  it("FR_CHK_007_start_again_is_offered_after_a_cancel_too_without_the_cap_line", async () => {
+    const onStartAgain = vi.fn();
+    render(<Receipt {...props} receipt={receipt({ endedReason: "canceled" })} maxDurationSeconds={3600} onStartAgain={onStartAgain} />);
+    expect(screen.queryByText(/is up/i)).toBeNull();
+    await userEvent.setup().click(screen.getByRole("button", { name: /start again/i }));
+    expect(onStartAgain).toHaveBeenCalledTimes(1);
   });
 });

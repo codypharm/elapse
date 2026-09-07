@@ -41,7 +41,7 @@ describe("real account api", () => {
     responses = [{ object: "list", data: [
       row(),
       row({ id: "sub_2", status: "paused", paused_at: T0 + 30, livemode: true, merchant: { name: "Halcyon", logo_url: "https://api.test/logo", support_url: null } }),
-      row({ id: "sub_3", status: "canceled", canceled_at: T0 + 220, ended_reason: "canceled", settled_usd: "0.88", refunded_usd: "13.52", seconds_elapsed: 220 }),
+      row({ id: "sub_3", status: "canceled", canceled_at: T0 + 220, ended_reason: "canceled", settled_usd: "0.88", refunded_usd: "13.52", seconds_elapsed: 220, checkout_session: "cs_3" }),
     ] }];
     const v = await api().getView();
     expect(calls[0]).toMatchObject({ method: "GET", url: `${BASE}/v1/account/subscriptions` });
@@ -52,7 +52,7 @@ describe("real account api", () => {
       { subscription: "sub_2", test: false, merchant: { name: "Halcyon", logoUrl: "https://api.test/logo" }, product: { name: "GPU · 4090", rateUsdPerSecond: "0.004" }, status: "paused", startedAt: T0 * 1000, pausedAt: (T0 + 30) * 1000, maxDurationSeconds: 3600, fundedUsd: "14.4" },
     ]);
     expect(v.receipts).toEqual([
-      { subscription: "sub_3", test: true, merchant: { name: "Nimbus", supportUrl: "https://nimbus.example/help" }, product: { name: "GPU · 4090", rateUsdPerSecond: "0.004" }, seconds: 220, amountSettledUsd: "0.88", refundedUsd: "13.52", startedAt: T0 * 1000, settledAt: (T0 + 220) * 1000, endedReason: "canceled", maxDurationSeconds: 3600 },
+      { subscription: "sub_3", session: "cs_3", test: true, merchant: { name: "Nimbus", supportUrl: "https://nimbus.example/help" }, product: { name: "GPU · 4090", rateUsdPerSecond: "0.004" }, seconds: 220, amountSettledUsd: "0.88", refundedUsd: "13.52", startedAt: T0 * 1000, settledAt: (T0 + 220) * 1000, endedReason: "canceled", maxDurationSeconds: 3600 },
     ]);
     // never a wallet or chain word on the shapes
     expect(JSON.stringify(v)).not.toMatch(/0x|wallet|chain|stream/);
@@ -88,5 +88,12 @@ describe("real account api", () => {
     responses = [{ object: "list", data: [row()] }];
     const v = await api().signIn();
     expect(v.status).toBe("signed_in");
+  });
+
+  it("FR_CHK_020_startAgain_posts_to_the_sessions_again_route_and_returns_the_new_url", async () => {
+    responses = [{ id: "cs_new", url: "http://localhost:3000/c/cs_new" }];
+    expect(await api().startAgain("cs_3")).toEqual({ url: "http://localhost:3000/c/cs_new" });
+    expect(calls[0]).toMatchObject({ method: "POST", url: `${BASE}/v1/checkout/sessions/cs_3/again` });
+    expect(calls[0]!.headers["x-privy-token"]).toBe("tok");
   });
 });

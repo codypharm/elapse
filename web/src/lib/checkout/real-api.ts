@@ -39,6 +39,7 @@ type WireSession = {
   subscription: WireSubscription | null;
   max_duration_seconds: number | null;
   max_escrow_usd: string | null;
+  last_max_duration_seconds?: number | null;
 };
 type WireSubscription = {
   id: string;
@@ -96,6 +97,7 @@ export function mapSession(w: WireSession, local?: { signedIn: boolean }): Check
     },
     customer,
     subscription: w.subscription ? mapSubscription(w.subscription) : null,
+    ...(w.last_max_duration_seconds ? { lastMaxDurationSeconds: w.last_max_duration_seconds } : {}),
     ...(local?.signedIn && !customer ? { signedIn: true } : {}),
   };
 }
@@ -268,8 +270,10 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       return receiptFrom(w.subscription);
     },
 
-    async startAgain() {
-      throw NOT_AVAILABLE("Start again");
+    // FR-CHK-007 / FR-API-126: a copy of this ended session, opened on the merchant's behalf for its own subscriber.
+    async startAgain(id) {
+      const next = await bindingCall<{ id: string; url: string }>(`/v1/checkout/sessions/${id}/again`, {});
+      return session(next.id);
     },
     // FR-CHK-029: the receipt goes to the identity's email through the account route; the token proves who asks.
     async emailReceipt(id) {

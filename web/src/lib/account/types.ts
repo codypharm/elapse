@@ -36,6 +36,8 @@ export type AccountMeter = {
 /** One finished session, in the words the receipt uses. One per ended meter, keyed by the subscription. */
 export type AccountReceipt = {
   subscription: `sub_${string}`;
+  /** The session it ran under, for Start again (FR-CHK-020, FR-API-126). */
+  session?: `cs_${string}`;
   test?: boolean;
   merchant: AccountMerchant;
   product: { name: string; rateUsdPerSecond: string };

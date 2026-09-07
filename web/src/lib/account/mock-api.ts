@@ -40,6 +40,8 @@ export interface AccountApi {
   signIn(): Promise<AccountView>;
   cancel(subscription: string): Promise<{ receipt: AccountReceipt; view: AccountView }>;
   emailReceipt(subscription: string): Promise<{ sent: true }>;
+  /** Opens a follow-on session for the receipt's session and returns where to go (FR-CHK-020, FR-API-126). */
+  startAgain(session: string): Promise<{ url: string }>;
 }
 
 const NIMBUS = { name: "Nimbus", supportUrl: "https://nimbus.example/support" };
@@ -209,6 +211,11 @@ export function createMockAccountApi(
       if (!m) throw new AccountApiError("not_found", "That meter is not running");
       const receipt = settle(m, now(), "canceled");
       return { receipt, view: view() };
+    },
+
+    async startAgain(session) {
+      await wait();
+      return { url: `/c/${session}` };
     },
 
     async emailReceipt(subscription) {

@@ -76,6 +76,17 @@ describe("CapStep", () => {
     expect(onChoose).toHaveBeenCalledWith(43200 * 60);
   });
 
+  it("FR_CHK_007_a_last_cap_is_preselected_as_a_preset_or_as_the_custom_minutes", async () => {
+    const onChoose = vi.fn();
+    const { unmount } = render(<CapStep rateUsdPerSecond={rate} initialSeconds={14_400} onChoose={onChoose} />);
+    expect(screen.getByRole("radio", { name: /4 hours/i })).toHaveAttribute("aria-checked", "true");
+    unmount();
+    render(<CapStep rateUsdPerSecond={rate} initialSeconds={5400} onChoose={onChoose} />);
+    expect((screen.getByRole("textbox", { name: /how many minutes/i }) as HTMLInputElement).value).toBe("90");
+    await userEvent.setup().click(screen.getByRole("button", { name: /^continue$/i }));
+    expect(onChoose).toHaveBeenCalledWith(5400);
+  });
+
   it("shows what the wallet can cover and disables what it cannot (FR-CHK-003)", () => {
     render(<CapStep rateUsdPerSecond={rate} availableUsd="20" onChoose={vi.fn()} />);
     expect(screen.getByText(/you have \$20\.00 available/i)).toBeInTheDocument();

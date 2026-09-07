@@ -257,6 +257,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
           <RatePanel product={session.product} />
           <CapStep
             rateUsdPerSecond={session.product.rateUsdPerSecond}
+            initialSeconds={session.lastMaxDurationSeconds}
             busy={busy}
             onChoose={(seconds) => run(() => api.setCap(sessionId, seconds))}
           />
@@ -330,7 +331,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
           merchant={session.merchant}
           successHref={successHref}
           maxDurationSeconds={session.subscription?.maxDurationSeconds}
-          onStartAgain={real ? undefined : startAgain}
+          onStartAgain={startAgain}
           startBusy={busy}
           emailBusy={emailBusy}
           emailSentTo={emailSentTo}

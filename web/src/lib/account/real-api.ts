@@ -14,6 +14,7 @@ export interface WireAccountSubscription {
   id: `sub_${string}`;
   status: "active" | "paused" | "canceled";
   livemode: boolean;
+  checkout_session?: string | null;
   merchant: { name: string; logo_url: string | null; support_url: string | null };
   product: { name: string; rate_usd_per_second: string };
   started_at: number | null;
@@ -59,6 +60,7 @@ export function meterFrom(w: WireAccountSubscription): AccountMeter {
 export function receiptFrom(w: WireAccountSubscription): AccountReceipt {
   return {
     subscription: w.id,
+    ...(w.checkout_session ? { session: w.checkout_session as `cs_${string}` } : {}),
     test: !w.livemode,
     merchant: merchantOf(w.merchant),
     product: { name: w.product.name, rateUsdPerSecond: w.product.rate_usd_per_second },
@@ -152,6 +154,12 @@ export function createRealAccountApi(o: RealAccountOptions): AccountApi {
 
     async emailReceipt(subscription) {
       return call<{ sent: true }>("POST", `/v1/account/subscriptions/${subscription}/receipt/email`, {});
+    },
+
+    // FR-API-126 through the checkout route: the identity token is the only pass it needs.
+    async startAgain(session) {
+      const next = await call<{ id: string; url: string }>("POST", `/v1/checkout/sessions/${session}/again`, {});
+      return { url: next.url };
     },
   };
 }

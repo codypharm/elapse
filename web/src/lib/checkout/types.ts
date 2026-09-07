@@ -69,6 +69,8 @@ export type CheckoutSession = {
   subscription: Subscription | null;
   /** Epoch ms. */
   expiresAt: number;
+  /** The cap chosen on the session this one was opened from with Start again (FR-CHK-007); the cap step preselects it. */
+  lastMaxDurationSeconds?: number;
   /**
    * The subscriber has signed in on this device but no Customer exists yet:
    * the real API creates it at `prepare`, once a cap is chosen (FR-API-032).

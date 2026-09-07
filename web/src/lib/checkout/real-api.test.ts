@@ -164,6 +164,18 @@ describe("real CheckoutApi", () => {
     await expect(a.emailReceipt("cs_abc", "a@b.co")).rejects.toMatchObject({ code: "already_sent", message: "Already sent. Check your inbox." });
   });
 
+  it("FR_CHK_007_startAgain_posts_to_again_with_the_token_and_the_new_session_carries_the_last_cap", async () => {
+    const a = api();
+    responses = [{ id: "cs_new", url: `${BASE}/c/cs_new` }, wireSession({ id: "cs_new", last_max_duration_seconds: 3600 })];
+    const next = await a.startAgain("cs_abc");
+    expect(calls[0]).toMatchObject({ method: "POST", url: `${BASE}/v1/checkout/sessions/cs_abc/again` });
+    expect(calls[0]!.headers?.["x-privy-token"]).toBe("tok_fresh");
+    expect(next.id).toBe("cs_new");
+    expect(next.lastMaxDurationSeconds).toBe(3600);
+    responses = [{ __status: 400, error: { type: "invalid_request_error", code: "product_archived", message: "This product is no longer available." } }];
+    await expect(a.startAgain("cs_abc")).rejects.toMatchObject({ message: "This product is no longer available." });
+  });
+
   it("API errors carry the server message and pause is not offered", async () => {
     responses = [{ __status: 409, error: { type: "invalid_request_error", code: "already_started", message: "This session has already started." } }];
     await expect(api().start("cs_abc")).rejects.toMatchObject({ code: "invalid_state", message: "This session has already started." });
