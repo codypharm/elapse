@@ -102,6 +102,6 @@ describe("mock account api", () => {
   it("email receipt resolves (mocked send)", async () => {
     const v = await api.getView();
     if (v.status !== "signed_in") throw new Error("expected signed in");
-    await expect(api.emailReceipt(v.receipts[0].invoice)).resolves.toEqual({ sent: true });
+    await expect(api.emailReceipt(v.receipts[0].subscription)).resolves.toEqual({ sent: true });
   });
 });

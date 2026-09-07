@@ -55,6 +55,8 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [busy, setBusy] = useState(false);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [judgeOpen, setJudgeOpen] = useState(params.get("judge") === "1");
@@ -330,19 +332,24 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
           maxDurationSeconds={session.subscription?.maxDurationSeconds}
           onStartAgain={real ? undefined : startAgain}
           startBusy={busy}
-          emailBusy={busy}
+          emailBusy={emailBusy}
+          emailSentTo={emailSentTo}
           onEmail={
-            real
-              ? undefined
-              : async () => {
-                  setBusy(true);
+            // FR-CHK-029: offered only when the sign-in carries an email to send to.
+            session.customer?.email
+              ? async () => {
+                  setEmailBusy(true);
                   try {
                     await api.emailReceipt(sessionId, session.customer?.email ?? "");
-                    toast.success("Receipt sent");
+                    setEmailSentTo(session.customer?.email ?? null);
+                    window.setTimeout(() => setEmailSentTo(null), 10_000);
+                  } catch (e) {
+                    toast.error(e instanceof CheckoutApiError && e.code === "already_sent" ? "Already sent. Check your inbox." : "We couldn't send the receipt. Try again.");
                   } finally {
-                    setBusy(false);
+                    setEmailBusy(false);
                   }
                 }
+              : undefined
           }
         />
       )}

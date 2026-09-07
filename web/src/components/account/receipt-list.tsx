@@ -38,7 +38,7 @@ export function ReceiptRow({ receipt: r, onOpen }: { receipt: AccountReceipt; on
       <MerchantMark name={r.merchant.name} logoUrl={r.merchant.logoUrl} size={24} />
       <span className="min-w-0 flex-1">
         <span className="block text-[15px] leading-tight">
-          You paid{" "}
+          You paid for{" "}
           <span className="numerals whitespace-nowrap text-[13px]">
             {r.seconds} {r.seconds === 1 ? "second" : "seconds"} ·{" "}
             <span className="text-live">${r.amountSettledUsd}</span>
@@ -46,6 +46,7 @@ export function ReceiptRow({ receipt: r, onOpen }: { receipt: AccountReceipt; on
         </span>
         <span className="mt-0.5 block truncate text-xs text-ink-soft">
           {r.merchant.name} · {r.product.name}
+          {r.test && <span className="placard ml-1.5 rounded-sm border border-border px-1 py-px text-[9px] text-ink-soft">Test</span>}
           <span className="numerals lg:hidden"> · {day(r.settledAt)}</span>
         </span>
       </span>
@@ -62,12 +63,16 @@ export function ReceiptSheet({
   onOpenChange,
   onEmail,
   emailBusy,
+  emailSentTo,
 }: {
   receipt: AccountReceipt | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onEmail: () => void;
+  /** Absent = no email on the sign-in, so the button is not offered (FR-CHK-029). */
+  onEmail?: () => void;
   emailBusy?: boolean;
+  /** Set for a few seconds after a send: "Sent to …" (FR-CHK-029). */
+  emailSentTo?: string | null;
 }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -79,7 +84,7 @@ export function ReceiptSheet({
           <>
             <SheetHeader className="px-0 pt-4">
               <SheetTitle className="display-wide text-balance text-[1.5rem] font-semibold leading-tight tracking-[-0.025em]">
-                You paid{" "}
+                You paid for{" "}
                 <span className="whitespace-nowrap numerals">
                   {r.seconds} {r.seconds === 1 ? "second" : "seconds"} ·
                 </span>{" "}
@@ -109,16 +114,18 @@ export function ReceiptSheet({
               <dd className="numerals text-right">${r.refundedUsd}</dd>
             </dl>
 
-            <Button
-              variant="outline"
-              size="lg"
-              onClick={onEmail}
-              disabled={emailBusy}
-              className="mt-5 h-12 w-full text-base"
-            >
-              <Mail data-icon="inline-start" className="size-4" />
-              {emailBusy ? "Sending…" : "Email receipt"}
-            </Button>
+            {onEmail && (
+              <Button
+                variant="outline"
+                size="lg"
+                onClick={onEmail}
+                disabled={emailBusy || Boolean(emailSentTo)}
+                className="mt-5 h-12 w-full text-base"
+              >
+                <Mail data-icon="inline-start" className="size-4" />
+                {emailBusy ? "Sending…" : emailSentTo ? `Sent to ${emailSentTo}` : "Email receipt"}
+              </Button>
+            )}
           </>
         )}
       </SheetContent>

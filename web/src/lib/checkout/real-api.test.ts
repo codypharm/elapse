@@ -147,6 +147,23 @@ describe("real CheckoutApi", () => {
     expect(r.receipt).toMatchObject({ secondsElapsed: 83, amountSettledUsd: "0.332", refundedUsd: "14.068", endedReason: "canceled" });
   });
 
+  it("FR_CHK_029_emailReceipt_posts_to_the_account_route_for_the_sessions_subscription_and_maps_the_rate_limit", async () => {
+    const a = api();
+    responses = [
+      wireSession({ status: "complete", subscription: wireSub({ status: "canceled", started_at: T0, canceled_at: T0 + 83, settled_usd: "0.332", seconds_elapsed: 83 }) }),
+      { sent: true },
+    ];
+    expect(await a.emailReceipt("cs_abc", "a@b.co")).toEqual({ sent: true });
+    const post = calls.find((c) => c.method === "POST")!;
+    expect(post.url).toBe(`${BASE}/v1/account/subscriptions/sub_1/receipt/email`);
+    expect(post.headers?.["x-privy-token"]).toBe("tok_fresh");
+    responses = [
+      wireSession({ status: "complete", subscription: wireSub({ status: "canceled", started_at: T0, canceled_at: T0 + 83 }) }),
+      { __status: 429, error: { type: "rate_limit_error", code: "receipt_already_sent", message: "Already sent. Check your inbox." } },
+    ];
+    await expect(a.emailReceipt("cs_abc", "a@b.co")).rejects.toMatchObject({ code: "already_sent", message: "Already sent. Check your inbox." });
+  });
+
   it("API errors carry the server message and pause is not offered", async () => {
     responses = [{ __status: 409, error: { type: "invalid_request_error", code: "already_started", message: "This session has already started." } }];
     await expect(api().start("cs_abc")).rejects.toMatchObject({ code: "invalid_state", message: "This session has already started." });

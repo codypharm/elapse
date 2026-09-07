@@ -1,26 +1,25 @@
 /**
- * The account API the browser uses. One instance per seed so state
- * persists across renders within a tab. Swap `createMockAccountApi` for
- * the real client when `api/` exists (FR-CHK-025).
+ * The account API the browser uses (ADR 2026-09-07 account on real data): the platform API
+ * whenever `NEXT_PUBLIC_ELAPSE_API_URL` is set, sharing the checkout's wallet and identity
+ * token; otherwise an empty in-memory mock so a build without an API never shows invented
+ * meters. Seeds exist only for component tests, behind `createMockAccountApi`.
  */
 "use client";
 
-import { ACCOUNT_SEEDS, createMockAccountApi, type AccountApi, type AccountSeed } from "./mock-api";
+import { createMockAccountApi, type AccountApi } from "./mock-api";
+import { createRealAccountApi } from "./real-api";
+import { getSubscriberWallet, getIdentityToken } from "@/lib/checkout/client";
 
-const instances = new Map<AccountSeed, AccountApi>();
+const API_URL = process.env.NEXT_PUBLIC_ELAPSE_API_URL;
+let instance: AccountApi | null = null;
 
-/** Reads the `?as=` seed; anything unknown falls back to the default. */
-export function parseSeed(value: string | null): AccountSeed {
-  return (ACCOUNT_SEEDS as readonly string[]).includes(value ?? "")
-    ? (value as AccountSeed)
-    : "two-merchants";
-}
+export const usesRealAccountApi = () => Boolean(API_URL);
 
-export function getAccountApi(seed: AccountSeed): AccountApi {
-  let instance = instances.get(seed);
+export function getAccountApi(): AccountApi {
   if (!instance) {
-    instance = createMockAccountApi({ seed });
-    instances.set(seed, instance);
+    instance = API_URL
+      ? createRealAccountApi({ baseUrl: API_URL, wallet: getSubscriberWallet, identityToken: getIdentityToken })
+      : createMockAccountApi({ seed: "empty" });
   }
   return instance;
 }

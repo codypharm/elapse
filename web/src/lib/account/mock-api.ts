@@ -26,7 +26,7 @@ export type AccountSeed = (typeof ACCOUNT_SEEDS)[number];
 
 export class AccountApiError extends Error {
   constructor(
-    public code: "not_found" | "invalid_state" | "network",
+    public code: "not_found" | "invalid_state" | "network" | "already_sent",
     message: string,
   ) {
     super(message);
@@ -39,7 +39,7 @@ export interface AccountApi {
   /** Passkey / Face ID sign-in; the mock resolves after the confirm sheet. */
   signIn(): Promise<AccountView>;
   cancel(subscription: string): Promise<{ receipt: AccountReceipt; view: AccountView }>;
-  emailReceipt(invoice: string): Promise<{ sent: true }>;
+  emailReceipt(subscription: string): Promise<{ sent: true }>;
 }
 
 const NIMBUS = { name: "Nimbus", supportUrl: "https://nimbus.example/support" };
@@ -104,7 +104,6 @@ function seedState(seed: AccountSeed, now: number): { meters: AccountMeter[]; re
   ];
   const receipts: AccountReceipt[] = [
     {
-      invoice: "in_7Hs1p",
       subscription: "sub_2mVe8",
       merchant: NIMBUS,
       product: GPU,
@@ -117,7 +116,6 @@ function seedState(seed: AccountSeed, now: number): { meters: AccountMeter[]; re
       maxDurationSeconds: 3600,
     },
     {
-      invoice: "in_5Ld0c",
       subscription: "sub_8qRa4",
       merchant: HALCYON,
       product: TRANSCRIBE,
@@ -141,7 +139,6 @@ export function createMockAccountApi(
   const seed = opts.seed ?? "two-merchants";
   const state = seedState(seed, now());
   let signedIn = seed !== "signed-out";
-  let invoiceN = 0;
 
   const wait = () =>
     latency > 0 ? new Promise<void>((r) => setTimeout(r, latency)) : Promise.resolve();
@@ -153,9 +150,7 @@ export function createMockAccountApi(
     const seconds = wholeSeconds(elapsedMsOf({ startedAt: m.startedAt, now: at, pausedAt: m.pausedAt }));
     let settled = settledNano(rate, seconds);
     if (settled > cap) settled = cap; // BR-CHK-002
-    invoiceN += 1;
     const receipt: AccountReceipt = {
-      invoice: `in_${(0x5f00 + invoiceN).toString(36)}`,
       subscription: m.subscription,
       merchant: m.merchant,
       product: m.product,
@@ -216,9 +211,9 @@ export function createMockAccountApi(
       return { receipt, view: view() };
     },
 
-    async emailReceipt(invoice) {
+    async emailReceipt(subscription) {
       await wait();
-      if (!state.receipts.some((r) => r.invoice === invoice)) {
+      if (!state.receipts.some((r) => r.subscription === subscription)) {
         throw new AccountApiError("not_found", "No such receipt");
       }
       return { sent: true };

@@ -27,6 +27,13 @@ export function setIdentityTokenSource(fn: (() => Promise<string | null>) | null
 export function hasSubscriberWallet(): boolean {
   return wallet !== null;
 }
+/** For the account client, which shares the checkout's sign-in (ADR 2026-09-07 account on real data). */
+export function getSubscriberWallet(): SubscriberWallet | null {
+  return wallet;
+}
+export function getIdentityToken(): Promise<string | null> {
+  return identityToken?.() ?? Promise.resolve(null);
+}
 
 export function isSeededSession(id: string): boolean {
   return (SEEDED_SESSION_IDS as readonly string[]).includes(id);

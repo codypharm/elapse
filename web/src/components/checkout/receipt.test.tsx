@@ -81,4 +81,15 @@ describe("Receipt", () => {
     const { container } = render(<Receipt {...props} receipt={receipt({ endedReason: "cap_reached" })} maxDurationSeconds={3600} />);
     expect(container.textContent).not.toMatch(/wallet|token|permit|transaction|chain|0x/i);
   });
+
+  it("FR_CHK_029_after_sending_the_button_reads_sent_to_the_address_and_is_disabled", () => {
+    render(<Receipt {...props} receipt={receipt()} emailSentTo="a@b.co" />);
+    const btn = screen.getByRole("button", { name: /sent to a@b\.co/i });
+    expect(btn).toBeDisabled();
+  });
+
+  it("FR_CHK_029_without_an_email_handler_no_email_button_is_offered", () => {
+    render(<Receipt {...props} receipt={receipt()} onEmail={undefined} />);
+    expect(screen.queryByRole("button", { name: /email receipt|sent to/i })).toBeNull();
+  });
 });

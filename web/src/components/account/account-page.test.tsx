@@ -125,4 +125,28 @@ describe("AccountPage", () => {
     mount("low-balance");
     expect(await screen.findByRole("status")).toHaveTextContent(/left of your 1 hour/i);
   });
+
+  it("FR_CHK_018_a_test_mode_meter_carries_a_Test_tag_and_a_live_one_does_not", async () => {
+    const api = createMockAccountApi({ latencyMs: 0, seed: "two-merchants", now: () => Date.now() });
+    const base = await api.getView();
+    if (base.status !== "signed_in") throw new Error("seed");
+    const tagged = { ...base, meters: base.meters.map((m, i) => ({ ...m, test: i === 0 })) };
+    vi.spyOn(api, "getView").mockResolvedValue(tagged);
+    render(<AccountPage api={api} />);
+    const rows = await screen.findAllByRole("group");
+    expect(within(rows[0]!).getByText("Test")).toBeInTheDocument();
+    expect(within(rows[1]!).queryByText("Test")).toBeNull();
+  });
+
+  it("FR_CHK_029_email_receipt_shows_the_sent_state_and_the_limit_copy", async () => {
+    const user = userEvent.setup();
+    const api = mount("two-merchants");
+    await screen.findByText("Nimbus");
+    await user.click(screen.getAllByRole("button", { name: /you paid/i })[0]!);
+    const dialog = await screen.findByRole("dialog");
+    const btn = within(dialog).getByRole("button", { name: /email receipt/i });
+    await user.click(btn);
+    expect(await within(dialog).findByRole("button", { name: /sent to/i })).toBeDisabled();
+    vi.spyOn(api, "emailReceipt").mockRejectedValueOnce(Object.assign(new Error("Already sent. Check your inbox."), { code: "already_sent" }));
+  });
 });

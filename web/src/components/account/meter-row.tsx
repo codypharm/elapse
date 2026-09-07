@@ -24,6 +24,11 @@ import { formatUsd } from "@/lib/meter/math";
 import { useMeter } from "@/lib/meter/use-meter";
 import { MerchantMark } from "./account-frame";
 
+/** The one mode word on the page: a meter started from a merchant's test link (ADR 2026-09-07 account on real data). */
+export function TestTag() {
+  return <span className="placard shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-[10px] text-ink-soft">Test</span>;
+}
+
 export function MeterRow({
   meter: m,
   busy,
@@ -52,9 +57,12 @@ export function MeterRow({
         <MerchantMark name={m.merchant.name} logoUrl={m.merchant.logoUrl} size={28} />
 
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[15px] font-semibold tracking-[-0.01em]">
-            {m.merchant.name}
-            <span className="font-normal text-ink-soft"> · {m.product.name}</span>
+          <p className="flex items-center gap-2 text-[15px] font-semibold tracking-[-0.01em]">
+            <span className="truncate">
+              {m.merchant.name}
+              <span className="font-normal text-ink-soft"> · {m.product.name}</span>
+            </span>
+            {m.test && <TestTag />}
           </p>
           <Readout
             elapsed={meter.elapsed}

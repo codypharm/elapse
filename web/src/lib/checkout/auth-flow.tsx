@@ -47,6 +47,8 @@ export interface AuthFlow {
    * Absent means ready.
    */
   ready?: boolean;
+  /** The signed-in identity's email, when it has one; `null` when signed in without one. Absent = unknown (mock). */
+  email?: string | null;
 }
 
 export const mockAuthFlow: AuthFlow = {

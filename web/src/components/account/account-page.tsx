@@ -30,8 +30,20 @@ import { RunningTotal } from "./running-total";
 /** Receipts shown before "Show more"; a subscriber wants the recent ones. */
 const RECEIPTS_SHOWN = 3;
 
-export function AccountPage({ api }: { api: AccountApi }) {
+export function AccountPage({
+  api,
+  pollMs = 1000,
+  email,
+}: {
+  api: AccountApi;
+  /** How often the view is re-read: 1 s against the mock, 5 s against the API (FR-CHK-018). */
+  pollMs?: number;
+  /** The sign-in's email, for the receipt's "Sent to …"; absent = no Email receipt button (FR-CHK-029). */
+  email?: string | null;
+}) {
   const [view, setView] = useState<AccountView | null>(null);
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailSentTo, setEmailSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [stopping, setStopping] = useState<AccountMeter | null>(null);
@@ -54,9 +66,9 @@ export function AccountPage({ api }: { api: AccountApi }) {
   useEffect(() => {
     const id = setInterval(() => {
       api.getView().then(setView).catch(() => {});
-    }, 1000);
+    }, pollMs);
     return () => clearInterval(id);
-  }, [api]);
+  }, [api, pollMs]);
 
   const onAuthenticated = useCallback(() => {
     setAuthOpen(false);
@@ -159,7 +171,7 @@ export function AccountPage({ api }: { api: AccountApi }) {
             <section className="flex flex-col gap-2">
               <h2 className="placard">Past sessions</h2>
               {receipts.slice(0, receiptLimit).map((r) => (
-                <ReceiptRow key={r.invoice} receipt={r} onOpen={() => setOpenReceipt(r)} />
+                <ReceiptRow key={r.subscription} receipt={r} onOpen={() => setOpenReceipt(r)} />
               ))}
               {receipts.length > receiptLimit && (
                 <button
@@ -187,19 +199,25 @@ export function AccountPage({ api }: { api: AccountApi }) {
         receipt={openReceipt}
         open={openReceipt !== null}
         onOpenChange={(o) => !o && setOpenReceipt(null)}
-        emailBusy={busy}
-        onEmail={async () => {
-          if (!openReceipt) return;
-          setBusy(true);
-          try {
-            await api.emailReceipt(openReceipt.invoice);
-            toast.success("Receipt sent");
-          } catch {
-            toast.error("Could not send the receipt");
-          } finally {
-            setBusy(false);
-          }
-        }}
+        emailBusy={emailBusy}
+        emailSentTo={emailSentTo}
+        onEmail={
+          email === null
+            ? undefined
+            : async () => {
+                if (!openReceipt) return;
+                setEmailBusy(true);
+                try {
+                  await api.emailReceipt(openReceipt.subscription);
+                  setEmailSentTo(email ?? "your email");
+                  window.setTimeout(() => setEmailSentTo(null), 10_000);
+                } catch (e) {
+                  toast.error((e as { code?: string }).code === "already_sent" ? "Already sent. Check your inbox." : "Could not send the receipt");
+                } finally {
+                  setEmailBusy(false);
+                }
+              }
+        }
       />
     </AccountFrame>
   );

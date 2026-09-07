@@ -20,6 +20,8 @@ export type AccountMerchant = {
 /** One running or paused meter, on one product, at one merchant. */
 export type AccountMeter = {
   subscription: `sub_${string}`;
+  /** Started from a merchant's test link (ADR 2026-09-07 account on real data): the row carries a "Test" tag. */
+  test?: boolean;
   merchant: AccountMerchant;
   product: { name: string; rateUsdPerSecond: string };
   status: Extract<SubscriptionStatus, "active" | "paused">;
@@ -31,10 +33,10 @@ export type AccountMeter = {
   fundedUsd: string;
 };
 
-/** One finished session, in the words the receipt uses. */
+/** One finished session, in the words the receipt uses. One per ended meter, keyed by the subscription. */
 export type AccountReceipt = {
-  invoice: `in_${string}`;
   subscription: `sub_${string}`;
+  test?: boolean;
   merchant: AccountMerchant;
   product: { name: string; rateUsdPerSecond: string };
   seconds: number;

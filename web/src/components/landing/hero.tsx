@@ -190,7 +190,7 @@ export function Hero() {
             >
               {locked ? (
                 <>
-                  You paid{" "}
+                  You paid for{" "}
                   <span className="whitespace-nowrap">
                     {seconds} {seconds === 1 ? "second" : "seconds"}
                   </span>{" "}

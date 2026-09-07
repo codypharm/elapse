@@ -216,6 +216,7 @@ function PrivyAuthFlow({ children }: { children: ReactNode }) {
       resumed,
       signedInAlready: walletReady,
       ready: restored,
+      email: authenticated ? (user?.email?.address ?? user?.google?.email ?? null) : null,
       linkPasskey: () =>
         new Promise<void>((resolve, reject) => {
           link.current = { resolve, reject };
@@ -239,7 +240,7 @@ function PrivyAuthFlow({ children }: { children: ReactNode }) {
           void loginWithCode({ code });
         }),
     }),
-    [authenticated, passkeyFirst, resumed, walletReady, restored, finish, loginWithPasskey, linkWithPasskey, initOAuth, sendCode, loginWithCode],
+    [authenticated, passkeyFirst, resumed, walletReady, restored, user, finish, loginWithPasskey, linkWithPasskey, initOAuth, sendCode, loginWithCode],
   );
 
   return <AuthFlowProvider value={flow}>{children}</AuthFlowProvider>;

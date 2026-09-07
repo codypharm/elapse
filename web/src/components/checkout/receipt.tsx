@@ -1,6 +1,6 @@
 /**
  * `Receipt` — what happened, in one line and a short breakdown. The hero
- * line is the product's promise: "You paid 83 seconds · $0.33". A session
+ * line is the product's promise: "You paid for 83 seconds · $0.33". A session
  * that used its whole cap says so and offers another, since the cap is
  * fixed once signed (FR-CHK-007). Then the merchant's success URL and a
  * mocked email receipt.
@@ -26,6 +26,7 @@ export function Receipt({
   startBusy,
   onEmail,
   emailBusy,
+  emailSentTo,
 }: {
   receipt: ReceiptData;
   product: Product;
@@ -35,9 +36,11 @@ export function Receipt({
   maxDurationSeconds?: number;
   onStartAgain?: () => void;
   startBusy?: boolean;
-  /** Absent = the email receipt is not offered (the real API grows it in Week 4). */
+  /** Absent = the email receipt is not offered (no email on the sign-in, FR-CHK-029). */
   onEmail?: () => void;
   emailBusy?: boolean;
+  /** Set for a few seconds after a send: the button reads "Sent to …" and rests (FR-CHK-029). */
+  emailSentTo?: string | null;
 }) {
   const time = (ms: number) =>
     new Date(ms).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
@@ -54,7 +57,7 @@ export function Receipt({
           </p>
         )}
         <p className="display-wide mt-2 text-balance text-[1.9rem] font-semibold leading-tight tracking-[-0.025em]">
-          You paid{" "}
+          You paid for{" "}
           <span className="whitespace-nowrap">{s} {s === 1 ? "second" : "seconds"} ·</span>{" "}
           <span className="numerals whitespace-nowrap text-live">${receipt.amountSettledUsd}</span>
         </p>
@@ -96,11 +99,11 @@ export function Receipt({
             variant="outline"
             size="lg"
             onClick={onEmail}
-            disabled={emailBusy}
+            disabled={emailBusy || Boolean(emailSentTo)}
             className="h-12 w-full text-base"
           >
             <Mail data-icon="inline-start" className="size-4" />
-            {emailBusy ? "Sending…" : "Email receipt"}
+            {emailBusy ? "Sending…" : emailSentTo ? `Sent to ${emailSentTo}` : "Email receipt"}
           </Button>
         )}
         <a

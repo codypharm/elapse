@@ -171,6 +171,7 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       if (res.status === 503 && serverCode === "subscriber_auth_unconfigured") throw new CheckoutApiError("unconfigured", "Checkout is not set up yet.");
       if (res.status === 401 && serverCode === "subscriber_auth_invalid") throw new StaleIdentity();
       if (res.status === 403 && serverCode === "subscriber_mismatch") throw new CheckoutApiError("sign_in_required", "Sign in again.");
+      if (res.status === 429 && serverCode === "receipt_already_sent") throw new CheckoutApiError("already_sent", "Already sent. Check your inbox.");
       const code = res.status === 404 ? "not_found" : res.status === 400 && serverCode === "invalid_cap" ? "invalid_amount" : res.status >= 500 ? "network" : "invalid_state";
       throw new CheckoutApiError(code, json?.error?.message ?? "Something went wrong.");
     }
@@ -270,8 +271,11 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
     async startAgain() {
       throw NOT_AVAILABLE("Start again");
     },
-    async emailReceipt() {
-      throw NOT_AVAILABLE("Email receipt");
+    // FR-CHK-029: the receipt goes to the identity's email through the account route; the token proves who asks.
+    async emailReceipt(id) {
+      const w = await getWire(id);
+      if (!w.subscription || w.subscription.status !== "canceled") throw new CheckoutApiError("invalid_state", "This meter has not stopped.");
+      return bindingCall<{ sent: true }>(`/v1/account/subscriptions/${w.subscription.id}/receipt/email`, {});
     },
 
     async getJudgeData(id) {
