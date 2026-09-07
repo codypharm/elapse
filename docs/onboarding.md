@@ -71,3 +71,8 @@ Six-week plan in the detailed doc §12. The gates that matter:
 | Design system | `DESIGN.md` (frontend), `docs/design-brief.md` (pages and states) |
 | Webhook signature reference implementation | `sdk/ts/src/index.ts` |
 | Meter math (the only money math in the UI) | `web/src/lib/meter/math.ts` |
+
+## Before a demo
+
+- The relayer wallet pays every start, cancel and settlement on testnet. Check its MON balance first; a dry relayer answers "We can't start meters right now" on Start. Top up at https://faucet.monad.xyz.
+- `grep keeper_batch_no_effect` on the worker log must be empty (FR-WRK-072): that line means settle transactions are burning gas for nothing.

@@ -6,7 +6,7 @@ import { insertCustomer } from "../src/db/customers";
 import { insertSubscription } from "../src/db/subscriptions";
 import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
-import { runKeeperOnce, KEEPER_CADENCE_S } from "../src/worker/keeper";
+import { runKeeperOnce, KEEPER_CADENCE_S, batchGas } from "../src/worker/keeper";
 
 let m: Fixture;
 let chain: ReturnType<typeof fakeChain>;
@@ -73,5 +73,54 @@ describe("FR-WRK-070 keeper", () => {
     expect(r.failed).toBe(1);
     const [row] = await sql`SELECT last_settle_requested_at FROM subscriptions WHERE stream_address = ${addr(20)}`;
     expect(row.last_settle_requested_at).toBeNull();
+  });
+
+});
+
+describe("FR-WRK-072 keeper gas comes from per-stream estimates, never the batch estimate", () => {
+  it("FR_WRK_072_batch_gas_is_25k_plus_the_sum_of_direct_estimates_times_1_25", () => {
+    expect(batchGas([210_305n])).toBe(25_000n + (210_305n * 125n) / 100n);
+    expect(batchGas([100_000n, 200_000n])).toBe(25_000n + 375_000n);
+    expect(batchGas([])).toBe(0n);
+  });
+
+  it("FR_WRK_072_each_due_stream_is_estimated_directly_and_the_batch_carries_the_summed_gas", async () => {
+    await stream({ address: addr(30), startedAt: NOW - 10_000, lastSettle: null });
+    await stream({ address: addr(31), startedAt: NOW - 10_000, lastSettle: null });
+    chain.settleEstimates.set(addr(30), 210_000n);
+    chain.settleEstimates.set(addr(31), 90_000n);
+    const r = await runKeeperOnce({ now: NOW, log: () => {} });
+    expect(r.settled.sort()).toEqual([addr(30), addr(31)]);
+    expect(chain.settleBatches).toHaveLength(1);
+    expect(chain.settleBatches[0]!.gas).toBe(batchGas([210_000n, 90_000n]));
+  });
+
+  it("FR_WRK_072_a_stream_whose_direct_estimate_reverts_is_skipped_this_tick_and_logged_once_per_hour", async () => {
+    await stream({ address: addr(32), startedAt: NOW - 10_000, maxDuration: 20_000, lastSettle: null });
+    await stream({ address: addr(33), startedAt: NOW - 10_000, maxDuration: 20_000, lastSettle: null });
+    chain.settleEstimates.set(addr(32), new Error("execution reverted: AlreadyCanceled()"));
+    const lines: Record<string, unknown>[] = [];
+    const log = (e: Record<string, unknown>) => lines.push(e);
+    const r = await runKeeperOnce({ now: NOW, log });
+    expect(r.settled).toEqual([addr(33)]);
+    expect(r.skipped).toEqual([addr(32)]);
+    expect(chain.settleBatches[0]!.streams).toEqual([addr(33)]);
+    expect(lines.filter((l) => l.skipped)).toEqual([{ chain_id: 10143, stream: addr(32), skipped: "execution reverted: AlreadyCanceled()" }]);
+    // the skipped stream stays due; a second tick within the hour finds only it, sends no batch, and does not log it again
+    await runKeeperOnce({ now: NOW + 60, log });
+    expect(lines.filter((l) => l.skipped)).toHaveLength(1);
+    expect(chain.settleBatches).toHaveLength(1);
+    // an hour later it is logged once more; the healthy stream is due again by cadence and goes out alone
+    await runKeeperOnce({ now: NOW + 3601, log });
+    expect(lines.filter((l) => l.skipped)).toHaveLength(2);
+    expect(chain.settleBatches.map((b) => b.streams)).toEqual([[addr(33)], [addr(33)]]);
+  });
+
+  it("FR_WRK_072_a_batch_receipt_with_no_logs_is_reported_as_the_drain_signature", async () => {
+    await stream({ address: addr(34), startedAt: NOW - 10_000, lastSettle: null });
+    chain.receiptLogs = 0;
+    const lines: Record<string, unknown>[] = [];
+    await runKeeperOnce({ now: NOW, log: (e) => lines.push(e) });
+    expect(lines.some((l) => l.keeper_batch_no_effect === true && l.level === "error")).toBe(true);
   });
 });

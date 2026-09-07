@@ -1,5 +1,5 @@
 import type { Address, Hex } from "viem";
-import type { ChainClient, CreateWithPermitArgs } from "../src/chain/relayer";
+import type { ChainClient, CreateWithPermitArgs, StreamLog, StreamState } from "../src/chain/relayer";
 
 /** In-memory chain: nonces, balances, and a log of every write. */
 export function fakeChain(opts: { chainId?: number; balances?: Record<string, bigint> } = {}) {
@@ -10,8 +10,14 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
   const creates: CreateWithPermitArgs[] = [];
   const cancels: Array<{ stream: string; deadline: bigint; signature: string }> = [];
   const keeperCancels: string[] = [];
-  const settleBatches: Array<{ chainId: number; streams: string[] }> = [];
-  const state = { failNextSettle: null as Error | null };
+  const settleBatches: Array<{ chainId: number; streams: string[]; gas: bigint }> = [];
+  /** Per-stream direct settle estimate, or an Error to make the direct call revert (FR-WRK-072). Default 210_000. */
+  const settleEstimates = new Map<string, bigint | Error>();
+  /** Per-stream on-chain state for reconcile (FR-WRK-073); an Error makes the read fail. Default: active. */
+  const streamStates = new Map<string, StreamState | Error>();
+  const streamLogs = new Map<string, StreamLog[]>();
+  const logQueries: Array<{ chainId: number; stream: string; fromBlock: number }> = [];
+  const state = { failNextSettle: null as Error | null, receiptLogs: null as number | null };
   const cancelNonces = new Map<string, bigint>();
   let n = 0;
   const hash = () => ("0x" + (++n).toString(16).padStart(64, "0")) as Hex;
@@ -39,14 +45,31 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
     async readCancelNonce(_c, stream) {
       return cancelNonces.get(stream.toLowerCase()) ?? 0n;
     },
-    async settleBatch(chainId, streams) {
+    async estimateSettle(_c, stream) {
+      const e = settleEstimates.get(stream.toLowerCase()) ?? 210_000n;
+      if (e instanceof Error) throw e;
+      return e;
+    },
+    async settleBatch(chainId, streams, gas) {
       if (state.failNextSettle) {
         const e = state.failNextSettle;
         state.failNextSettle = null;
         throw e;
       }
-      settleBatches.push({ chainId, streams: streams.map((s) => s.toLowerCase()) });
+      settleBatches.push({ chainId, streams: streams.map((s) => s.toLowerCase()), gas });
       return hash();
+    },
+    async receiptLogCount() {
+      return state.receiptLogs ?? 1;
+    },
+    async readStreamState(_c, stream) {
+      const st = streamStates.get(stream.toLowerCase()) ?? { status: 1, merchant: "0x1111111111111111111111111111111111111111", subscriber: "0x2222222222222222222222222222222222222222", treasury: "0xaf1444abf40afc91bcb4a6793765553c6bccea0d", settledSeconds: 0n };
+      if (st instanceof Error) throw st;
+      return st;
+    },
+    async readStreamLogs(chainId, stream, fromBlock) {
+      logQueries.push({ chainId, stream: stream.toLowerCase(), fromBlock: Number(fromBlock) });
+      return streamLogs.get(stream.toLowerCase()) ?? [];
     },
     async cancel(_c, stream) {
       keeperCancels.push(stream.toLowerCase());
@@ -59,9 +82,13 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
     },
   };
   return {
-    client, mints, creates, cancels, keeperCancels, settleBatches, balances, nonces,
+    client, mints, creates, cancels, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces,
     set failNextSettle(e: Error | null) {
       state.failNextSettle = e;
+    },
+    /** Logs the next settle receipt reports; 0 is the drain signature (FR-WRK-072). */
+    set receiptLogs(n: number | null) {
+      state.receiptLogs = n;
     },
     setNonce: (a: Address, v: bigint) => nonces.set(a.toLowerCase(), v),
     setCancelNonce: (s: string, v: bigint) => cancelNonces.set(s.toLowerCase(), v),

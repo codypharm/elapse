@@ -46,6 +46,14 @@ export const permitTokenAbi = [
 export const streamAbi = [
   { type: "function", name: "cancelNonce", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "cancel", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "settle", stateMutability: "nonpayable", inputs: [], outputs: [] },
+  { type: "function", name: "status", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+  { type: "function", name: "settledSeconds", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "merchant", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "subscriber", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "function", name: "treasury", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
+  { type: "event", name: "Settled", inputs: [{ name: "seconds_", type: "uint256", indexed: false }, { name: "amount", type: "uint256", indexed: false }, { name: "fee", type: "uint256", indexed: false }] },
+  { type: "event", name: "StreamCanceled", inputs: [{ name: "at", type: "uint256", indexed: false }, { name: "secondsElapsed", type: "uint256", indexed: false }, { name: "amountSettled", type: "uint256", indexed: false }, { name: "amountRefunded", type: "uint256", indexed: false }] },
   {
     type: "function",
     name: "cancelFor",

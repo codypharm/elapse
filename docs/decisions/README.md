@@ -38,3 +38,5 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-06 | ["Send test delivery" works on the CLI endpoint while `elapse listen` is connected](./2026-09-06-test-delivery-on-cli-endpoint.md) | William |
 | 2026-09-06 | [The example merchant has its own brand, not Elapse's design system](./2026-09-06-example-merchant-own-brand.md) | William |
 | 2026-09-07 | [Checkout `prepare` and `cancel/prepare` require a Privy identity token](./2026-09-07-privy-identity-token-on-prepare.md) | William |
+| 2026-09-07 | [Payout address: optional at setup, required to create Checkout sessions and to go live](./2026-09-07-payout-address-gates-checkout-and-live-keys.md) | William |
+| 2026-09-07 | [The keeper gasses `settleBatch` from per-stream estimates, never from the batch estimate](./2026-09-07-keeper-gas-per-stream-estimate.md) | William |

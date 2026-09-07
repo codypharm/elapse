@@ -1,6 +1,7 @@
 import { runForever } from "./run";
 import { keeperForever, KEEPER_CADENCE_S, KEEPER_TICK_MS } from "./keeper";
 import { heartbeatForever } from "./heartbeat";
+import { reconcileForever, RECONCILE_INTERVAL_S } from "./reconcile";
 import { cliExpiryForever } from "../services/cli-stream";
 import { newId } from "../lib/ids";
 
@@ -22,10 +23,12 @@ const log = (entry: Record<string, unknown>) => console.log(JSON.stringify({ at:
 const workerId = process.env.WORKER_ID ?? newId("wrk");
 let keeperTick: Date | null = null;
 const keeperOn = process.env.KEEPER !== "0";
-console.log(`elapse worker started (concurrency ${concurrency}, batch ${batch}, keeper ${keeperOn ? `every ${KEEPER_TICK_MS / 1000}s, cadence ${KEEPER_CADENCE_S}s` : "off"})`);
+console.log(`elapse worker started (concurrency ${concurrency}, batch ${batch}, keeper ${keeperOn ? `every ${KEEPER_TICK_MS / 1000}s, cadence ${KEEPER_CADENCE_S}s` : "off"}, reconcile ${keeperOn ? `every ${RECONCILE_INTERVAL_S}s` : "off"})`);
 await Promise.all([
   runForever({ batch, concurrency, timeoutMs: 10_000, log }, controller.signal),
   keeperOn ? keeperForever(controller.signal, log, () => { keeperTick = new Date(); }) : Promise.resolve(),
+  keeperOn ? reconcileForever(controller.signal, log) : Promise.resolve(), // FR-WRK-073: same relayer env, read-only
+
   heartbeatForever(workerId, () => keeperTick, controller.signal),
   cliExpiryForever(controller.signal, log),
 ]);
