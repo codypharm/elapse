@@ -40,3 +40,5 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [Checkout `prepare` and `cancel/prepare` require a Privy identity token](./2026-09-07-privy-identity-token-on-prepare.md) | William |
 | 2026-09-07 | [Payout address: optional at setup, required to create Checkout sessions and to go live](./2026-09-07-payout-address-gates-checkout-and-live-keys.md) | William |
 | 2026-09-07 | [The keeper gasses `settleBatch` from per-stream estimates, never from the batch estimate](./2026-09-07-keeper-gas-per-stream-estimate.md) | William |
+| 2026-09-07 | [The 13 October submission runs on Monad testnet; live mode points at testnet too; the relayer gets its own wallet now](./2026-09-07-submission-on-testnet-live-mode-mockusd.md) | William |
+| 2026-09-07 | [The submission ships `@elapse/sdk` (TypeScript) only; the Python package waits](./2026-09-07-sdk-typescript-only-for-submission.md) | William |

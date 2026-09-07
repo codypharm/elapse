@@ -1,6 +1,6 @@
 # `@elapse/sdk` (TypeScript) and `elapse` (Python) — FRD
 
-Status: **Signed 2026-09-05 (William)** · Surface: Merchant SDK (server-side, Node 20+) · Sources: detailed doc §3, §4.1–§4.4, §5.1–§5.3, §9, §12 (Weeks 2, 5), §14, §15; current `sdk/ts/src/index.ts`, `sdk/ts/package.json`.
+Status: **Signed 2026-09-05 (William); Python frozen out of the submission 2026-09-07 (William, FR-SDK-041)** · Surface: Merchant SDK (server-side, Node 20+) · Sources: detailed doc §3, §4.1–§4.4, §5.1–§5.3, §9, §12 (Weeks 2, 5), §14, §15; current `sdk/ts/src/index.ts`, `sdk/ts/package.json`.
 
 ## Problem
 
@@ -124,3 +124,4 @@ Errors: `ElapseError > { ElapseAuthenticationError, ElapseInvalidRequestError, E
 | 2026-09-05 | William | Signed. TS build begins with `constructEvent`. |
 | 2026-09-06 | William | Published `@elapse/sdk@0.1.0` to npm (public, `@elapse` scope now held). The default `baseUrl` `https://api.elapse.dev` is not live yet; the launch version bumps the default when the API is deployed (Week 5). |
 | 2026-09-06 | Claude (for William) | Domain `elapse.finance`: FR-SDK-001 default `baseUrl` is `https://api.elapse.finance`; `VERSION` and package bumped to 0.1.1 for William to publish. Until that host resolves and 0.1.1 is on npm, docs and the example pass `baseUrl` explicitly (docs BR-DOC-008). |
+| 2026-09-07 | William | TypeScript only for 13 October ([ADR 2026-09-07 SDK](../decisions/2026-09-07-sdk-typescript-only-for-submission.md)): FR-SDK-041 applies, `sdk/python/` is not published, docs keep TypeScript + cURL. Python is the first SDK item after submission. |

@@ -44,7 +44,7 @@ FRs are user-facing behaviour ("As a subscriber I can…"). BRs are constraints 
 | `api-frd.md` | **Signed** · grilled 2026-09-05 · FR-API-120/125 and the FR-API-032 amendment (identity token) **signed and built 2026-09-07** | William, 2026-09-05 |
 | `indexer-frd.md` | **Signed** · Undecided 1–5 closed; FR-IDX-024/062 deferred to Week 4 | William, 2026-09-05 |
 | `worker-frd.md` | **Signed** · Week 2 delivery loop first; keeper/heartbeat Week 3, notices/CLI Week 4 | William, 2026-09-05 |
-| `sdk-frd.md` | **Signed** · TS client + `constructEvent` next; Python Week 5 | William, 2026-09-05 |
+| `sdk-frd.md` | **Signed** · `@elapse/sdk@0.1.0` on npm; **Python frozen out of the submission 2026-09-07** (FR-SDK-041) | William, 2026-09-05 |
 | `cli-frd.md` | **Signed** · built 2026-09-06 (API FR-API-130–134 + `cli/`), proven on the local API; npm publish pending the `@elapse` scope check | William, 2026-09-06 |
 | `docs-site-frd.md` | **Signed** · built 2026-09-06 (`docs-site/`, snippet sync, surface check, CI workflow); Mintlify hosting connect and hosted API URL pending | William, 2026-09-06 |
 | `examples-frd.md` | **Signed** · built and proven 2026-09-06, including the FR-EXM-031 CI job | William, 2026-09-06 |
