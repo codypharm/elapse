@@ -13,6 +13,9 @@ import { useCallback, useState } from "react";
 import { ChevronRight, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "sonner";
+import { fieldError } from "@/lib/forms/field-error";
+import { endpointUrlCopy } from "@/lib/forms/rules";
 import { DashboardApiError } from "@/lib/dashboard/mock-api";
 import { newIdempotencyKey } from "@/lib/dashboard/idempotency";
 import { useMode } from "@/lib/dashboard/mode";
@@ -48,7 +51,10 @@ export function WebhooksPage() {
       setSecret(res.secret);
       await reload();
     } catch (e) {
-      setError(e instanceof DashboardApiError ? e.message : "Something went wrong. Try again.");
+      // FR-DSH-115: a rejection naming the URL lands under it in the form's own words; anything else toasts.
+      const f = fieldError(e, { url: endpointUrlCopy });
+      if (f) setError(f.message);
+      else toast.error(e instanceof DashboardApiError ? e.message : "Something went wrong. Try again.");
     } finally {
       setBusy(false);
     }

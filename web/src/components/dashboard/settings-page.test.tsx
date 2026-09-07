@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SettingsPage } from "./settings-page";
 import { MerchantProvider } from "./merchant-context";
-import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
+import { DashboardApiError, createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
 import type { Merchant } from "@/lib/dashboard/types";
 
 vi.mock("next/navigation", () => ({
@@ -47,6 +47,40 @@ describe("SettingsPage", () => {
     await user.type(name, "Nimbus Cloud");
     await user.click(screen.getByRole("button", { name: /save profile/i }));
     await waitFor(() => expect(setMerchant).toHaveBeenCalledWith(expect.objectContaining({ name: "Nimbus Cloud" })));
+  });
+
+  it("FR_DSH_114_profile_blocks_save_on_a_bad_support_email_or_url_and_shows_the_rule", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    mount(api, m);
+    const email = document.getElementById("biz-support-email")!;
+    const url = document.getElementById("biz-support-url")!;
+    expect(screen.getByLabelText(/business name/i)).toHaveAttribute("maxlength", "80");
+    expect(email).toHaveAttribute("maxlength", "254");
+    await user.clear(email);
+    await user.type(email, "help@acme");
+    expect(screen.getByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save profile/i })).toBeDisabled();
+    await user.type(email, ".test");
+    expect((email as HTMLInputElement).value).toBe("help@acme.test");
+    expect(screen.queryByText("Enter a valid email address.")).toBeNull();
+    await user.clear(url);
+    await user.type(url, "acme.test/help");
+    expect(screen.getByText("Enter a link starting with https://.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save profile/i })).toBeDisabled();
+    await user.clear(url);
+    expect(screen.getByRole("button", { name: /save profile/i })).toBeEnabled();
+  });
+
+  it("FR_DSH_115_a_server_rejection_on_the_profile_lands_under_the_field", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    mount(api, m);
+    vi.spyOn(api, "updateMerchant").mockRejectedValueOnce(Object.assign(new DashboardApiError("invalid_input", "Invalid support_url: must be a URL"), { param: "support_url", status: 400 }));
+    await user.click(screen.getByRole("button", { name: /save profile/i }));
+    const url = document.getElementById("biz-support-url")!;
+    await waitFor(() => expect(url).toHaveAttribute("aria-invalid", "true"));
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter a link starting with https://.");
   });
 
   it("changes the payout address only when re-typed, with the helper copy (FR-DSH-101)", async () => {
@@ -98,6 +132,53 @@ describe("SettingsPage", () => {
     await user.type(accent, "#3b82f6");
     await waitFor(() => expect(screen.queryByText(/hard to see/i)).not.toBeInTheDocument());
     expect(screen.getByText(/layout and copy are always ours/i)).toBeInTheDocument();
+  });
+
+  it("FR_DSH_103_a_png_uploads_at_once_and_shows_in_the_preview_anything_else_is_refused_before_upload", async () => {
+    // `accept` already filters the picker; applyAccept off exercises the byte check behind it.
+    const user = userEvent.setup({ applyAccept: false });
+    const m = await signIn(api);
+    mount(api, m);
+    const upload = vi.spyOn(api, "uploadLogo");
+    const input = screen.getByLabelText(/^logo$/i) as HTMLInputElement;
+    expect(input).toHaveAttribute("accept", "image/png");
+    const svg = new File(['<svg xmlns="http://www.w3.org/2000/svg"/>'], "logo.svg", { type: "image/svg+xml" });
+    await user.upload(input, svg);
+    expect(await screen.findByText("Use a PNG under 50 KB.")).toBeInTheDocument();
+    expect(upload).not.toHaveBeenCalled();
+    const renamed = new File([new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9])], "logo.png", { type: "image/png" });
+    await user.upload(input, renamed);
+    await waitFor(() => expect(upload).not.toHaveBeenCalled());
+    expect(screen.getByText("Use a PNG under 50 KB.")).toBeInTheDocument();
+    const png = new File([new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0])], "logo.png", { type: "image/png" });
+    await user.upload(input, png);
+    await waitFor(() => expect(upload).toHaveBeenCalledTimes(1));
+    const preview = screen.getByTestId("checkout-preview");
+    await waitFor(() => expect(within(preview).getByRole("presentation")).toHaveAttribute("src", expect.stringMatching(/^mock:\/\/logo\//)));
+    expect(screen.queryByText("Use a PNG under 50 KB.")).toBeNull();
+    const remove = vi.spyOn(api, "removeLogo");
+    await user.click(screen.getByRole("button", { name: /remove logo/i }));
+    await waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(within(preview).queryByRole("presentation")).toBeNull());
+  });
+
+  it("FR_DSH_114_branding_blocks_save_on_a_bad_accent_or_support_url", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    mount(api, m);
+    const accent = screen.getByLabelText(/^accent colour$/i);
+    expect(accent).toHaveAttribute("maxlength", "7");
+    await user.clear(accent);
+    await user.type(accent, "amber");
+    expect(screen.getByText("Use a colour like #1D4ED8.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /save branding/i })).toBeDisabled();
+    await user.clear(accent);
+    await user.type(accent, "#3b82f6");
+    expect(screen.getByRole("button", { name: /save branding/i })).toBeEnabled();
+    const url = document.getElementById("brand-support")!;
+    await user.clear(url);
+    await user.type(url, "nimbus.example/help");
+    expect(screen.getByRole("button", { name: /save branding/i })).toBeDisabled();
   });
 
   it("offers a colour picker on the swatch that stays in sync with the hex field and the preview (FR-DSH-103)", async () => {

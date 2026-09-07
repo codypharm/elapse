@@ -98,7 +98,7 @@ export function InvoicesPage() {
       <div className="mt-6 flex flex-wrap items-end gap-3">
         <label className="flex flex-col gap-1 text-[12px] text-ink-soft">
           Subscription id
-          <input aria-label="Subscription id" value={subscription} onChange={(e) => setSubscription(e.target.value)} placeholder="sub_…" className={input + " w-44"} />
+          <input aria-label="Subscription id" value={subscription} onChange={(e) => setSubscription(e.target.value)} placeholder="sub_…" maxLength={40} autoComplete="off" spellCheck={false} className={input + " w-44"} />
         </label>
         <label className="flex flex-col gap-1 text-[12px] text-ink-soft">
           From

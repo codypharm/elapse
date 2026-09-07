@@ -53,6 +53,29 @@ describe("CapStep", () => {
     expect(screen.getByRole("button", { name: /enter how long/i })).toBeDisabled();
   });
 
+  it("FR_CHK_028_a_custom_length_is_whole_minutes_between_1_and_30_days_with_the_rule_shown", async () => {
+    const user = userEvent.setup();
+    const onChoose = vi.fn();
+    render(<CapStep rateUsdPerSecond="0.004" onChoose={onChoose} busy={false} />);
+    await user.click(screen.getByRole("button", { name: /another length/i }));
+    const input = screen.getByRole("textbox", { name: /how many minutes/i });
+    expect(input).toHaveAttribute("maxlength", "5");
+    expect(input).toHaveAttribute("pattern", "[0-9]*");
+    await user.type(input, "0");
+    expect(screen.getByText("Between 1 minute and 30 days.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /enter how long/i })).toBeDisabled();
+    await user.clear(input);
+    await user.type(input, "43201");
+    expect(screen.getByText("Between 1 minute and 30 days.")).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, "1.5");
+    expect(screen.getByText("Enter whole minutes.")).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, "43200");
+    await user.click(screen.getByRole("button", { name: /^continue$/i }));
+    expect(onChoose).toHaveBeenCalledWith(43200 * 60);
+  });
+
   it("shows what the wallet can cover and disables what it cannot (FR-CHK-003)", () => {
     render(<CapStep rateUsdPerSecond={rate} availableUsd="20" onChoose={vi.fn()} />);
     expect(screen.getByText(/you have \$20\.00 available/i)).toBeInTheDocument();

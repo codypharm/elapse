@@ -545,12 +545,33 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
       }
     },
     async updateMerchant(input, opts) {
+      // FR-DSH-100: values go trimmed, and a blank optional field goes as null (the API refuses "" for an email or URL).
+      const blankToNull = (v: string | null | undefined) => (v === undefined ? undefined : v === null || v.trim() === "" ? null : v.trim());
       const body: Record<string, unknown> = {};
-      if (input.name !== undefined) body.name = input.name;
-      if (input.supportEmail !== undefined) body.support_email = input.supportEmail;
-      if (input.supportUrl !== undefined) body.support_url = input.supportUrl;
-      if (input.branding) body.branding = { display_name: input.branding.name ?? null, accent: input.branding.accent ?? null, support_url: input.branding.supportUrl ?? null };
+      if (input.name !== undefined && input.name !== null) body.name = input.name.trim();
+      if (input.supportEmail !== undefined) body.support_email = blankToNull(input.supportEmail);
+      if (input.supportUrl !== undefined) body.support_url = blankToNull(input.supportUrl);
+      if (input.branding) body.branding = { display_name: blankToNull(input.branding.name) ?? null, accent: blankToNull(input.branding.accent) ?? null, support_url: blankToNull(input.branding.supportUrl) ?? null };
       return mapMerchant(await call<WireProfile>("POST", "/v1/dashboard/me", { body, idempotencyKey: idem(opts) }));
+    },
+    async uploadLogo(file, opts) {
+      // Multipart, so `call` (JSON only) is bypassed; the same cookie, origin and idempotency rules apply.
+      const form = new FormData();
+      form.set("logo", file, file.name || "logo.png");
+      const headers: Record<string, string> = { "x-elapse-mode": modeOf(undefined), "idempotency-key": idem(opts) ?? newIdempotencyKey() };
+      let res: Response;
+      try {
+        res = await fetch(`${o.baseUrl}/v1/dashboard/branding/logo`, { method: "POST", headers, credentials: "include", body: form });
+      } catch {
+        throw new DashboardApiError("network", "We couldn't reach Elapse. Check your connection and try again.", 0);
+      }
+      const text = await res.text();
+      const json = text ? (JSON.parse(text) as { error?: { code?: string; message?: string; param?: string } }) : null;
+      if (!res.ok) throw new DashboardApiError(codeFor(res.status, json?.error?.code, "/v1/dashboard/branding/logo"), json?.error?.message ?? "Something went wrong.", res.status, json?.error?.code, json?.error?.param);
+      return mapMerchant(json as unknown as WireProfile);
+    },
+    async removeLogo(opts) {
+      return mapMerchant(await call<WireProfile>("DELETE", "/v1/dashboard/branding/logo", { idempotencyKey: idem(opts) }));
     },
     async changePayoutAddress(input, opts) {
       await call("POST", "/v1/dashboard/payout_address", { body: { address: input.address, confirm: input.confirm }, idempotencyKey: idem(opts) });
@@ -596,11 +617,13 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
       currentMode = mode;
       const q = query.trim();
       const routes: Array<[string, string]> = [["prod_", "/dashboard/products"], ["sub_", "/dashboard/subscriptions/"], ["cus_", "/dashboard/customers/"], ["evt_", "/dashboard/developers/events/"], ["wh_", "/dashboard/developers/webhooks/"], ["cs_", "/dashboard/subscriptions"]];
+      // FR-DSH-118: the query is typed text; it is encoded before it enters a path or the router.
+      const id = encodeURIComponent(q);
       for (const [prefix, path] of routes) {
         if (q.startsWith(prefix)) {
-          const exists = await call<unknown>("GET", prefix === "prod_" ? `/v1/products/${q}` : prefix === "sub_" ? `/v1/subscriptions/${q}` : prefix === "cus_" ? `/v1/customers/${q}` : prefix === "evt_" ? `/v1/events/${q}` : prefix === "wh_" ? `/v1/webhook_endpoints/${q}` : `/v1/checkout/sessions/${q}`).then(() => true).catch(() => false);
+          const exists = await call<unknown>("GET", prefix === "prod_" ? `/v1/products/${id}` : prefix === "sub_" ? `/v1/subscriptions/${id}` : prefix === "cus_" ? `/v1/customers/${id}` : prefix === "evt_" ? `/v1/events/${id}` : prefix === "wh_" ? `/v1/webhook_endpoints/${id}` : `/v1/checkout/sessions/${id}`).then(() => true).catch(() => false);
           if (!exists) return null;
-          return path.endsWith("/") ? `${path}${q}` : path;
+          return path.endsWith("/") ? `${path}${id}` : path;
         }
       }
       if (q.includes("@")) {

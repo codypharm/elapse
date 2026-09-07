@@ -51,8 +51,8 @@ export function WebhookCard({
   demo?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-between">
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <span className="placard">
           POST /webhooks · your server{demo ? " · example" : ""}
         </span>

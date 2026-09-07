@@ -179,7 +179,7 @@ export function Hero() {
       <ProofRail />
 
       <div className="mx-auto max-w-[1280px] px-5 md:px-8">
-        <div className="grid gap-8 border-b border-border py-12 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-8 border-b border-border py-12 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-12">
           <div className="flex flex-col gap-3">
             <motion.p
               key={locked ? `locked-${startedAt}` : "resting"}

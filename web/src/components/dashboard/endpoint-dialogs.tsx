@@ -13,6 +13,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { EVENT_TYPES, type EventType, type WebhookEndpoint } from "@/lib/dashboard/types";
 import { cn } from "@/lib/utils";
+import { FieldHint } from "@/components/ui/field-hint";
+import { check, rules } from "@/lib/forms/rules";
 import { CheckBox } from "./check-box";
 import { GRACE_OPTIONS, GraceRadios } from "./grace-radios";
 
@@ -41,6 +43,10 @@ export function EndpointFormDialog({
   const [all, setAll] = useState(initial ? initial.events === "*" : true);
   const [picked, setPicked] = useState<EventType[]>(initial && initial.events !== "*" ? initial.events : []);
   const toggle = (t: EventType) => setPicked((p) => (p.includes(t) ? p.filter((x) => x !== t) : [...p, t]));
+  // FR-DSH-114: an http(s) URL under 2048 and at least one event; the live-mode https rule stays on the server (FR-API-062).
+  const urlProblem = check(rules.endpointUrl, url);
+  const eventsProblem = all || picked.length > 0 ? null : "Pick at least one event.";
+  const valid = !urlProblem && !eventsProblem;
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onCancel()}>
@@ -48,7 +54,7 @@ export function EndpointFormDialog({
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit({ url: url.trim(), events: all ? "*" : picked });
+            if (valid) onSubmit({ url: url.trim(), events: all ? "*" : picked });
           }}
           className="contents"
           noValidate
@@ -65,19 +71,23 @@ export function EndpointFormDialog({
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://your.app/webhooks/elapse"
               inputMode="url"
+              autoComplete="url"
               spellCheck={false}
               autoFocus
-              aria-invalid={error ? true : undefined}
+              maxLength={rules.endpointUrl.maxLength}
+              aria-invalid={error || (url.trim() && urlProblem) ? true : undefined}
+              aria-describedby="endpoint-url-hint"
               className="numerals h-10 text-[13px]"
             />
-            {error && (
-              <p role="alert" className="text-[13px] text-caution">
-                {error}
-              </p>
-            )}
+            <FieldHint id="endpoint-url-hint" error={error ?? (url.trim() ? urlProblem : null)} hint="Live endpoints must be https:// and reachable from the internet." />
           </div>
           <fieldset className="flex flex-col gap-1.5">
             <legend className="text-sm font-medium">Events</legend>
+            {eventsProblem && (
+              <p role="alert" className="text-[13px] text-caution">
+                {eventsProblem}
+              </p>
+            )}
             <label className="flex min-h-11 cursor-pointer items-center gap-2.5 py-1 text-[14px] md:min-h-8">
               <input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} className="peer sr-only" />
               <CheckBox checked={all} />
@@ -97,7 +107,7 @@ export function EndpointFormDialog({
             <Button type="button" variant="outline" onClick={onCancel} className="h-9">
               Cancel
             </Button>
-            <Button type="submit" disabled={busy} className="h-9">
+            <Button type="submit" disabled={busy || !valid} className="h-9">
               {busy ? "Saving…" : submitLabel}
             </Button>
           </DialogFooter>

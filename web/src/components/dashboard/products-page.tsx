@@ -18,6 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { newIdempotencyKey } from "@/lib/dashboard/idempotency";
+import { fieldError } from "@/lib/forms/field-error";
 import { DashboardApiError, type ProductInput } from "@/lib/dashboard/mock-api";
 import { useMode } from "@/lib/dashboard/mode";
 import type { Product } from "@/lib/dashboard/types";
@@ -39,24 +40,35 @@ export function ProductsPage() {
   const { data, loading, stale, reload } = usePoll(fetcher);
 
   const [drawer, setDrawer] = useState<{ open: true; product?: Product } | null>(params.get("new") === "1" ? { open: true } : null);
-  const [formError, setFormError] = useState<string | null>(null);
+  const [formError, setFormError] = useState<{ field?: "name" | "rate" | "description"; message: string } | null>(null);
   const [archiving, setArchiving] = useState<Product | null>(null);
   const [liveLink, setLiveLink] = useState<Product | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const run = async (fn: () => Promise<void>, onError?: (m: string) => void) => {
+  const run = async (fn: () => Promise<void>, onError?: (e: unknown) => void) => {
     if (busy) return;
     setBusy(true);
     try {
       await fn();
       await reload();
     } catch (e) {
-      const msg = e instanceof DashboardApiError ? e.message : "Something went wrong. Try again.";
-      if (onError) onError(msg);
-      else toast.error(msg);
+      if (onError) onError(e);
+      else toast.error(e instanceof DashboardApiError ? e.message : "Something went wrong. Try again.");
     } finally {
       setBusy(false);
     }
+  };
+
+  // FR-DSH-115: a rejection naming a field lands under it; anything else is the form's own line.
+  const PRODUCT_FIELDS = {
+    name: "Keep the name between 1 and 200 characters.",
+    rate_usd_per_second: (m: string) => (m.includes("decimal") ? "Use at most 6 decimal places." : "Enter a decimal like 0.004."),
+    description: "Keep the description under 1000 characters.",
+  } as const;
+  const onSaveError = (e: unknown) => {
+    const f = fieldError(e, PRODUCT_FIELDS);
+    if (f) setFormError({ field: f.field === "rate_usd_per_second" ? "rate" : (f.field as "name" | "description"), message: f.message });
+    else setFormError({ message: e instanceof DashboardApiError ? e.message : "Something went wrong. Try again." });
   };
 
   const save = (input: ProductInput) =>
@@ -68,7 +80,7 @@ export function ProductsPage() {
         setFormError(null);
         toast.success(drawer?.product ? "Saved" : "Product created");
       },
-      setFormError,
+      onSaveError,
     );
 
   const copyLink = (p: Product) =>

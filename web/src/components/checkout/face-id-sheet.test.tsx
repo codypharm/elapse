@@ -56,6 +56,39 @@ describe("FaceIdSheet", () => {
     await waitFor(() => expect(done).toHaveBeenCalledWith({ email: "a@b.co" }));
   });
 
+  it("FR_CHK_028_email_and_code_follow_the_shared_rules_and_hold_continue_until_they_pass", async () => {
+    const user = userEvent.setup();
+    const sendCode = vi.fn(async () => {});
+    const verifyCode = vi.fn(async () => ({ email: "a@b.co" }));
+    renderSheet(flowWith({ passkeyFirst: false, usesCode: true, sendCode, verifyCode }));
+    const email = screen.getByRole("textbox", { name: /Email address/ });
+    expect(email).toHaveAttribute("autocomplete", "email");
+    expect(email).toHaveAttribute("maxlength", "254");
+    const cont = () => screen.getByRole("button", { name: /^Continue$/ });
+    expect(cont()).toBeDisabled();
+    await user.type(email, "a@b");
+    expect(screen.getByText("Enter a valid email address.")).toBeInTheDocument();
+    expect(cont()).toBeDisabled();
+    await user.type(email, ".co ");
+    expect(cont()).toBeEnabled();
+    await user.click(cont());
+    expect(sendCode).toHaveBeenCalledWith("a@b.co");
+    const code = await screen.findByRole("textbox", { name: /One-time code/ });
+    expect(code).toHaveAttribute("maxlength", "6");
+    expect(code).toHaveAttribute("inputmode", "numeric");
+    expect(code).toHaveAttribute("pattern", "[0-9]*");
+    await user.type(code, "12345");
+    expect(cont()).toBeDisabled();
+    await user.type(code, "a");
+    expect(screen.getByText("Enter the 6-digit code.")).toBeInTheDocument();
+    expect(cont()).toBeDisabled();
+    await user.clear(code);
+    await user.type(code, "123456");
+    expect(cont()).toBeEnabled();
+    await user.click(cont());
+    await waitFor(() => expect(verifyCode).toHaveBeenCalledWith("a@b.co", "123456"));
+  });
+
   it("Not now skips the offer and a failed link still signs the subscriber in", async () => {
     const linkPasskey = vi.fn(async () => {
       throw new Error("nope");

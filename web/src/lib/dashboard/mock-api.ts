@@ -132,6 +132,10 @@ export interface DashboardApiMore {
   listLedger(mode: Mode, filter: { kind?: LedgerKind; subscription?: string; since?: number; until?: number }): Promise<LedgerEntry[]>;
   getBalance(mode: Mode): Promise<Balance>;
   updateMerchant(input: Partial<Pick<Merchant, "name" | "supportEmail" | "supportUrl" | "branding">>, opts?: WriteOpts): Promise<Merchant>;
+  /** Stores the checkout logo, a PNG ≤ 50 KB, and returns the merchant with its new `branding.logoUrl` (FR-DSH-103, FR-API-104). */
+  uploadLogo(file: File, opts?: WriteOpts): Promise<Merchant>;
+  /** Clears the checkout logo (FR-API-104). */
+  removeLogo(opts?: WriteOpts): Promise<Merchant>;
   /** Requires the address typed twice; writes the audit log (FR-DSH-101). */
   changePayoutAddress(input: { address: string; confirm: string }, opts?: WriteOpts): Promise<Merchant>;
   getNotificationSettings(): Promise<NotificationSettings>;
@@ -148,13 +152,13 @@ export interface DashboardApiMore {
 export type ProductInput = { name: string; rateUsdPerSecond: string; description: string | null; allowPause: boolean };
 
 /** Positive decimal string with at most 9 fraction digits; never a float (BR-DSH-007). */
-export const RATE_PATTERN = /^(0|[1-9]\d*)(\.\d{1,9})?$/;
+export const RATE_PATTERN = /^(0|[1-9]\d*)(\.\d{1,6})?$/;
 
 function validateProduct(input: Partial<ProductInput>) {
   if (input.name !== undefined && !input.name.trim()) throw new DashboardApiError("invalid_input", "Give the product a name");
   if (input.rateUsdPerSecond !== undefined) {
     const r = input.rateUsdPerSecond.trim();
-    if (!RATE_PATTERN.test(r)) throw new DashboardApiError("invalid_input", "Rate must be a decimal like 0.004, with up to 9 decimal places");
+    if (!RATE_PATTERN.test(r)) throw new DashboardApiError("invalid_input", "Rate must be a decimal like 0.004, with up to 6 decimal places");
     if (parseRate(r) <= 0n) throw new DashboardApiError("invalid_input", "Rate must be more than zero");
   }
 }
@@ -235,11 +239,12 @@ function validateEndpoint(input: Partial<EndpointInput>) {
     try {
       u = new URL(input.url);
     } catch {
-      throw new DashboardApiError("invalid_input", "Enter a full URL, starting with https://");
+      // Same shape as the API's rejection (FR-API-082): `param` names the field.
+      throw Object.assign(new DashboardApiError("invalid_input", "Invalid url: must be an absolute URL"), { param: "url", status: 400 });
     }
     const local = u.hostname === "localhost" || u.hostname === "127.0.0.1";
     if (u.protocol !== "https:" && !(u.protocol === "http:" && local)) {
-      throw new DashboardApiError("invalid_input", "Endpoints must use https (http is allowed for localhost)");
+      throw Object.assign(new DashboardApiError("invalid_input", "Invalid url: must use https in live mode"), { param: "url", status: 400 });
     }
   }
   if (input.events !== undefined && input.events !== "*") {
@@ -966,6 +971,26 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
           supportUrl: input.supportUrl !== undefined ? input.supportUrl?.trim() || null : m.supportUrl,
           branding: input.branding ? { ...m.branding, ...input.branding } : m.branding,
         };
+        store.merchants.set(m.id, next);
+        return wait(next);
+      });
+    },
+
+    async uploadLogo(file, opts = {}) {
+      return idempotent(opts.idempotencyKey, async () => {
+        const m = current();
+        if (file.type !== "image/png" || file.size > 50 * 1024) throw new DashboardApiError("invalid_input", "Use a PNG under 50 KB.");
+        const next: Merchant = { ...m, branding: { ...m.branding, logoUrl: `mock://logo/${m.id}?v=${file.size}` } };
+        store.merchants.set(m.id, next);
+        return wait(next);
+      });
+    },
+
+    async removeLogo(opts = {}) {
+      return idempotent(opts.idempotencyKey, async () => {
+        const m = current();
+        const { logoUrl: _gone, ...rest } = m.branding;
+        const next: Merchant = { ...m, branding: rest };
         store.merchants.set(m.id, next);
         return wait(next);
       });

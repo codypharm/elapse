@@ -12,6 +12,8 @@ import { useEffect, useRef, useState } from "react";
 import { useAuthFlow, type AuthResult } from "@/lib/checkout/auth-flow";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldHint } from "@/components/ui/field-hint";
+import { check, rules } from "@/lib/forms/rules";
 import {
   Sheet,
   SheetContent,
@@ -46,6 +48,9 @@ export function FaceIdSheet({
   const [result, setResult] = useState<AuthResult | null>(resume ?? null);
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  // FR-CHK-028: the same checks the server and the identity provider apply, shown as typed.
+  const emailProblem = check(rules.email, email);
+  const codeProblem = check(rules.code, code);
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
@@ -189,20 +194,26 @@ export function FaceIdSheet({
             className="flex flex-col gap-3 pb-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (email.includes("@") && !busy) void submitEmail();
+              if (!emailProblem && !busy) void submitEmail();
             }}
+            noValidate
           >
             <Input
               autoFocus
               type="email"
               inputMode="email"
+              autoComplete="email"
+              maxLength={rules.email.maxLength}
               placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               aria-label="Email address"
+              aria-invalid={email.trim() && emailProblem ? true : undefined}
+              aria-describedby="checkout-email-hint"
               className="h-12 text-base"
             />
-            <Button type="submit" size="lg" disabled={!email.includes("@") || busy} className="h-12 w-full text-base">
+            <FieldHint id="checkout-email-hint" error={email.trim() ? emailProblem : null} />
+            <Button type="submit" size="lg" disabled={emailProblem !== null || busy} className="h-12 w-full text-base">
               {busy ? "Sending…" : "Continue"}
             </Button>
             <p className="text-center text-xs text-ink-soft">
@@ -236,21 +247,27 @@ export function FaceIdSheet({
             className="flex flex-col gap-3 pb-2"
             onSubmit={(e) => {
               e.preventDefault();
-              if (code.trim().length >= 6 && !busy) void submitCode();
+              if (!codeProblem && !busy) void submitCode();
             }}
+            noValidate
           >
             <p className="text-sm text-ink-soft">Enter the code we sent to {email.trim()}.</p>
             <Input
               autoFocus
               inputMode="numeric"
+              pattern={rules.code.pattern}
+              maxLength={rules.code.maxLength}
               autoComplete="one-time-code"
               placeholder="123456"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               aria-label="One-time code"
+              aria-invalid={code.trim().length >= 6 && codeProblem ? true : undefined}
+              aria-describedby="checkout-code-hint"
               className="h-12 text-base tracking-widest"
             />
-            <Button type="submit" size="lg" disabled={code.trim().length < 6 || busy} className="h-12 w-full text-base">
+            <FieldHint id="checkout-code-hint" error={code.trim().length >= 6 ? codeProblem : null} />
+            <Button type="submit" size="lg" disabled={codeProblem !== null || busy} className="h-12 w-full text-base">
               {busy ? "Checking…" : "Continue"}
             </Button>
             <button type="button" onClick={() => setStep("email")} className="py-1 text-center text-xs text-ink-soft">

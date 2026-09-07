@@ -46,6 +46,7 @@ export function SearchBox({ api, onNavigate, size = "sm", className }: { api: Da
         void go();
       }}
       className={cn("relative", className)}
+      noValidate
     >
       <Search className={cn("pointer-events-none absolute top-1/2 -translate-y-1/2 text-ink-soft", size === "lg" ? "left-3 size-4" : "left-2.5 size-3.5")} />
       <input
@@ -54,6 +55,8 @@ export function SearchBox({ api, onNavigate, size = "sm", className }: { api: Da
         onChange={(e) => setQ(e.target.value)}
         placeholder="Search ids or emails"
         aria-label="Search"
+        autoComplete="off"
+        maxLength={254}
         disabled={!api}
         className={cn(
           "numerals w-full rounded-lg border border-input bg-transparent outline-none placeholder:font-sans placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30",

@@ -11,6 +11,8 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FieldHint } from "@/components/ui/field-hint";
+import { check, rules } from "@/lib/forms/rules";
 import {
   CAP_PRESETS_SECONDS,
   formatCap,
@@ -48,11 +50,13 @@ export function CapStep({
   const [minutes, setMinutes] = useState("");
   const custom = choice === "custom";
 
+  // FR-CHK-028: whole minutes within the server's bounds (60 s to 30 days), shown as typed.
+  const minutesProblem = custom && minutes.trim() ? check(rules.capMinutes, minutes) : null;
   let seconds: number | null = null;
   if (custom) {
     try {
       const parsed = parseCapMinutes(minutes);
-      seconds = affordable(parsed) ? parsed : null;
+      seconds = !minutesProblem && affordable(parsed) ? parsed : null;
     } catch {
       seconds = null;
     }
@@ -113,19 +117,27 @@ export function CapStep({
       </button>
 
       {custom && (
-        <div className="relative">
-          <Input
-            autoFocus
-            inputMode="numeric"
-            placeholder="30"
-            value={minutes}
-            onChange={(e) => setMinutes(e.target.value)}
-            aria-label="How many minutes"
-            className="numerals h-12 pr-20 text-lg"
-          />
-          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-soft">
-            minutes
-          </span>
+        <div className="flex flex-col gap-1.5">
+          <div className="relative">
+            <Input
+              autoFocus
+              inputMode="numeric"
+              pattern={rules.capMinutes.pattern}
+              maxLength={rules.capMinutes.maxLength}
+              autoComplete="off"
+              placeholder="30"
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              aria-label="How many minutes"
+              aria-invalid={minutesProblem ? true : undefined}
+              aria-describedby="cap-minutes-hint"
+              className="numerals h-12 pr-20 text-lg"
+            />
+            <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-ink-soft">
+              minutes
+            </span>
+          </div>
+          <FieldHint id="cap-minutes-hint" error={minutesProblem} hint="Between 1 minute and 30 days." />
         </div>
       )}
 

@@ -17,6 +17,8 @@ import { ArrowRight, MailCheck } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FieldHint } from "@/components/ui/field-hint";
+import { check, rules } from "@/lib/forms/rules";
 import { getDashboardApi } from "@/lib/dashboard/client";
 import type { DashboardApi } from "@/lib/dashboard/mock-api";
 import { cn } from "@/lib/utils";
@@ -38,12 +40,14 @@ export function LoginForm({ api: injected }: { api?: DashboardApi }) {
     return () => clearInterval(id);
   }, [cooldown]);
 
+  // FR-DSH-114: the same email rule the API applies (one @, a dot after it, ≤ 254), shown as typed.
+  const problem = check(rules.email, email);
   const send = async () => {
-    if (busy) return;
+    if (busy || problem) return;
     setBusy(true);
     setError(null);
     try {
-      const res = await api.requestMagicLink(email);
+      const res = await api.requestMagicLink(email.trim());
       setSent({ email: email.trim().toLowerCase(), devToken: res.devToken });
       setCooldown(RESEND_COOLDOWN_S);
     } catch (err) {
@@ -125,17 +129,14 @@ export function LoginForm({ api: injected }: { api?: DashboardApi }) {
             autoComplete="email"
             inputMode="email"
             autoFocus
-            required
-            aria-invalid={error ? true : undefined}
+            maxLength={rules.email.maxLength}
+            aria-invalid={error || (email.trim() && problem) ? true : undefined}
+            aria-describedby="email-hint"
             className="h-11 text-base"
           />
-          {error && (
-            <p role="alert" className="text-[13px] text-caution">
-              {error}
-            </p>
-          )}
+          <FieldHint id="email-hint" error={error ?? (email.trim() ? problem : null)} />
         </div>
-        <Button type="submit" size="lg" disabled={busy} className="h-11 w-full text-[15px]">
+        <Button type="submit" size="lg" disabled={busy || problem !== null} className="h-11 w-full text-[15px]">
           {busy ? "Sending…" : "Send sign-in link"}
           <ArrowRight data-icon="inline-end" className="size-4" />
         </Button>

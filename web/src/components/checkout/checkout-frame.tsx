@@ -13,6 +13,7 @@ import { Lock } from "lucide-react";
 import { useRef } from "react";
 import { Logo } from "@/components/site/logo";
 import type { Branding } from "@/lib/checkout/types";
+import { check, rules } from "@/lib/forms/rules";
 import { cn } from "@/lib/utils";
 
 export function CheckoutFrame({
@@ -36,9 +37,11 @@ export function CheckoutFrame({
     }
   };
 
-  const accentStyle = merchant.accent
-    ? ({ "--live": merchant.accent, "--pen": merchant.accent } as React.CSSProperties)
-    : undefined;
+  // Last line before a merchant value becomes a CSS value or an href: only a #rrggbb accent and
+  // an http(s) link get through, whatever the API (or a mock) handed us (FR-DSH-114).
+  const accent = merchant.accent && check(rules.accent, merchant.accent) === null ? merchant.accent : undefined;
+  const supportUrl = merchant.supportUrl && check(rules.url, merchant.supportUrl) === null ? merchant.supportUrl : undefined;
+  const accentStyle = accent ? ({ "--live": accent, "--pen": accent } as React.CSSProperties) : undefined;
 
   return (
     <div
@@ -64,11 +67,13 @@ export function CheckoutFrame({
           <Lock className="size-3.5" aria-hidden />
           <span>Powered by</span>
           <Logo size={14} className="text-foreground/80 [&>span]:text-[0.8rem]" />
-          {merchant.supportUrl && (
+          {supportUrl && (
             <>
               <span aria-hidden>·</span>
               <a
-                href={merchant.supportUrl}
+                href={supportUrl}
+                target="_blank"
+                rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
                 className="!text-ink-soft underline-offset-3 hover:!text-foreground"
               >

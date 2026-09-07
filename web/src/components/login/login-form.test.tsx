@@ -30,13 +30,19 @@ describe("LoginForm (FR-DSH-010)", () => {
     expect(screen.getByText("demo@elapse.finance")).toBeInTheDocument();
   });
 
-  it("rejects an invalid email with a named problem", async () => {
+  it("FR_DSH_114_names_the_problem_with_an_invalid_email_and_holds_the_button_until_it_is_fixed", async () => {
     const user = userEvent.setup();
     const api = createMockDashboardApi({ latencyMs: 0 });
     render(<LoginForm api={api} />);
-    await user.type(screen.getByLabelText(/email/i), "nope");
-    await user.click(screen.getByRole("button", { name: /send/i }));
+    const email = screen.getByLabelText(/email/i);
+    expect(email).toHaveAttribute("maxlength", "254");
+    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
+    await user.type(email, "nope");
     expect(await screen.findByRole("alert")).toHaveTextContent(/valid email/i);
+    expect(screen.getByRole("button", { name: /send/i })).toBeDisabled();
+    await user.type(email, "@acme.test");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("button", { name: /send/i })).toBeEnabled();
   });
 
   it("disables resend for 30 seconds", async () => {

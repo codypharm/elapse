@@ -20,6 +20,9 @@ import { newIdempotencyKey } from "@/lib/dashboard/idempotency";
 import { DashboardApiError } from "@/lib/dashboard/mock-api";
 import { usePoll } from "@/lib/dashboard/use-poll";
 import { useMerchant } from "./merchant-context";
+import { FieldHint } from "@/components/ui/field-hint";
+import { fieldError } from "@/lib/forms/field-error";
+import { check, rules } from "@/lib/forms/rules";
 
 export function Section({ title, lede, children }: { title: string; lede?: string; children: React.ReactNode }) {
   return (
@@ -33,42 +36,107 @@ export function Section({ title, lede, children }: { title: string; lede?: strin
   );
 }
 
+/** Which `param` the API may name on a profile save, and the copy shown under that field (FR-DSH-115). */
+const PROFILE_FIELDS = { name: "Keep the name between 1 and 80 characters.", support_email: "Enter a valid email address.", support_url: "Enter a link starting with https://." } as const;
+type ProfileField = keyof typeof PROFILE_FIELDS;
+
 export function ProfileSection() {
   const { api, merchant, setMerchant } = useMerchant();
   const [name, setName] = useState(merchant.name ?? "");
   const [supportEmail, setSupportEmail] = useState(merchant.supportEmail ?? "");
   const [supportUrl, setSupportUrl] = useState(merchant.supportUrl ?? "");
   const [busy, setBusy] = useState(false);
+  const [serverError, setServerError] = useState<{ field: ProfileField; message: string } | null>(null);
+  // FR-DSH-114: the rules the API enforces, checked as the merchant types; Save waits for all three.
+  const problems = {
+    name: check(rules.businessName, name),
+    support_email: check(rules.optional(rules.email), supportEmail),
+    support_url: check(rules.optional(rules.url), supportUrl),
+  };
+  const valid = !problems.name && !problems.support_email && !problems.support_url;
+  const shown = (f: ProfileField, value: string) => (serverError?.field === f ? serverError.message : value.trim() ? problems[f] : f === "name" ? null : problems[f]);
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !valid) return;
     setBusy(true);
+    setServerError(null);
     try {
       setMerchant(await api.updateMerchant({ name, supportEmail, supportUrl }, { idempotencyKey: newIdempotencyKey() }));
       toast.success("Profile saved");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong");
+      const f = fieldError(err, PROFILE_FIELDS);
+      if (f) setServerError({ field: f.field as ProfileField, message: f.message });
+      else toast.error(err instanceof Error ? err.message : "Something went wrong");
     } finally {
       setBusy(false);
     }
   };
+  const field = (f: ProfileField) => ({
+    "aria-invalid": shown(f, f === "name" ? name : f === "support_email" ? supportEmail : supportUrl) ? (true as const) : undefined,
+    "aria-describedby": `biz-${f}-hint`,
+    onChange: () => serverError?.field === f && setServerError(null),
+  });
   return (
     <Section title="Business profile" lede="What subscribers and your team see.">
       <form onSubmit={save} className="flex flex-col gap-4" noValidate>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="biz-name">Business name</Label>
-          <Input id="biz-name" value={name} onChange={(e) => setName(e.target.value)} className="h-10" />
+          <Input
+            id="biz-name"
+            value={name}
+            maxLength={rules.businessName.maxLength}
+            autoComplete="organization"
+            {...field("name")}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (serverError?.field === "name") setServerError(null);
+            }}
+            className="h-10"
+          />
+          <FieldHint id="biz-name-hint" error={shown("name", name)} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="biz-support-email">Support email</Label>
-          <Input id="biz-support-email" type="email" value={supportEmail} onChange={(e) => setSupportEmail(e.target.value)} className="numerals h-10 text-[14px]" />
+          <Label htmlFor="biz-support-email">
+            Support email <span className="font-normal text-ink-soft">(optional)</span>
+          </Label>
+          <Input
+            id="biz-support-email"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            value={supportEmail}
+            maxLength={rules.email.maxLength}
+            {...field("support_email")}
+            onChange={(e) => {
+              setSupportEmail(e.target.value);
+              if (serverError?.field === "support_email") setServerError(null);
+            }}
+            className="numerals h-10 text-[14px]"
+          />
+          <FieldHint id="biz-support_email-hint" error={shown("support_email", supportEmail)} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="biz-support-url">Support URL</Label>
-          <Input id="biz-support-url" type="url" value={supportUrl} onChange={(e) => setSupportUrl(e.target.value)} className="numerals h-10 text-[14px]" />
+          <Label htmlFor="biz-support-url">
+            Support URL <span className="font-normal text-ink-soft">(optional)</span>
+          </Label>
+          <Input
+            id="biz-support-url"
+            type="url"
+            inputMode="url"
+            autoComplete="url"
+            value={supportUrl}
+            maxLength={rules.url.maxLength}
+            {...field("support_url")}
+            onChange={(e) => {
+              setSupportUrl(e.target.value);
+              if (serverError?.field === "support_url") setServerError(null);
+            }}
+            className="numerals h-10 text-[14px]"
+          />
+          <FieldHint id="biz-support_url-hint" error={shown("support_url", supportUrl)} hint="Where subscribers go for help. Starts with https://." />
         </div>
         <div>
-          <Button type="submit" disabled={busy} className="h-9">
+          <Button type="submit" disabled={busy || !valid} className="h-9">
             {busy ? "Saving…" : "Save profile"}
           </Button>
         </div>
@@ -85,8 +153,10 @@ export function PayoutSection() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // Live validation: the button wakes only when the address is well-formed and typed twice the same (FR-DSH-101).
-  const wellFormed = /^0x[0-9a-fA-F]{40}$/.test(address);
-  const formHint = address && !wellFormed ? "An address is 0x followed by 40 hex characters." : null;
+  // FR-DSH-114: the same address rule every form uses.
+  const addressProblem = check(rules.address, address);
+  const wellFormed = addressProblem === null;
+  const formHint = address && !wellFormed ? addressProblem : null;
   const matchHint = confirm && confirm !== address ? "The two addresses don't match." : null;
   const ready = wellFormed && confirm === address && !busy;
   const change = async (e: React.FormEvent) => {
@@ -139,7 +209,7 @@ export function PayoutSection() {
             </DialogHeader>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="payout-new">New address</Label>
-              <Input id="payout-new" value={address} onChange={(e) => setAddress(e.target.value.trim())} placeholder="0x…" spellCheck={false} autoFocus aria-invalid={formHint ? true : undefined} aria-describedby={formHint ? "payout-new-hint" : undefined} className="numerals h-10 text-[13px]" />
+              <Input id="payout-new" value={address} onChange={(e) => setAddress(e.target.value.trim())} placeholder="0x…" spellCheck={false} autoFocus maxLength={rules.address.maxLength} pattern={rules.address.pattern} autoComplete="off" aria-invalid={formHint ? true : undefined} aria-describedby={formHint ? "payout-new-hint" : undefined} className="numerals h-10 text-[13px]" />
               {formHint && (
                 <p id="payout-new-hint" className="text-[13px] text-ink-soft">
                   {formHint}
@@ -148,7 +218,7 @@ export function PayoutSection() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="payout-confirm">Type it again</Label>
-              <Input id="payout-confirm" value={confirm} onChange={(e) => setConfirm(e.target.value.trim())} placeholder="0x…" spellCheck={false} aria-invalid={error || matchHint ? true : undefined} aria-describedby={matchHint ? "payout-confirm-hint" : undefined} className="numerals h-10 text-[13px]" />
+              <Input id="payout-confirm" value={confirm} onChange={(e) => setConfirm(e.target.value.trim())} placeholder="0x…" spellCheck={false} maxLength={rules.address.maxLength} pattern={rules.address.pattern} autoComplete="off" aria-invalid={error || matchHint ? true : undefined} aria-describedby={matchHint ? "payout-confirm-hint" : undefined} className="numerals h-10 text-[13px]" />
               {matchHint && !error && (
                 <p id="payout-confirm-hint" className="text-[13px] text-ink-soft">
                   {matchHint}
@@ -179,12 +249,18 @@ export function NotificationsSection() {
   const { api } = useMerchant();
   const fetcher = useCallback(() => api.getNotificationSettings(), [api]);
   const { data, reload } = usePoll(fetcher, { intervalMs: 60_000 });
+  const [saving, setSaving] = useState(false);
+  // One write at a time: a second flick while the first is in flight would race it (FR-DSH-114).
   const set = async (patch: Partial<{ emailOnExhausted: boolean; emailOnExpiring: boolean }>) => {
+    if (saving) return;
+    setSaving(true);
     try {
       await api.updateNotificationSettings(patch, { idempotencyKey: newIdempotencyKey() });
       await reload();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
+      setSaving(false);
     }
   };
   return (
@@ -195,14 +271,14 @@ export function NotificationsSection() {
             <span className="block text-[14px] font-medium">Webhook endpoint stopped retrying</span>
             <span className="block text-[12px] text-ink-soft">After the 8th failed attempt on any delivery.</span>
           </span>
-          <Switch aria-label="Email when a webhook endpoint stopped retrying" checked={data?.emailOnExhausted ?? true} onCheckedChange={(v) => set({ emailOnExhausted: v })} disabled={!data} />
+          <Switch aria-label="Email when a webhook endpoint stopped retrying" checked={data?.emailOnExhausted ?? true} onCheckedChange={(v) => set({ emailOnExhausted: v })} disabled={!data || saving} />
         </label>
         <label className="flex items-start justify-between gap-4 px-4 py-3">
           <span>
             <span className="block text-[14px] font-medium">API key or signing secret about to expire</span>
             <span className="block text-[12px] text-ink-soft">24 hours and 1 hour before a rolled key or secret stops working.</span>
           </span>
-          <Switch aria-label="Email when an API key or signing secret is about to expire" checked={data?.emailOnExpiring ?? true} onCheckedChange={(v) => set({ emailOnExpiring: v })} disabled={!data} />
+          <Switch aria-label="Email when an API key or signing secret is about to expire" checked={data?.emailOnExpiring ?? true} onCheckedChange={(v) => set({ emailOnExpiring: v })} disabled={!data || saving} />
         </label>
       </div>
     </Section>
@@ -219,7 +295,7 @@ export function DangerSection() {
     if (busy) return;
     setBusy(true);
     try {
-      await api.deleteTestData({ confirmName: typed }, { idempotencyKey: newIdempotencyKey() });
+      await api.deleteTestData({ confirmName: typed.trim() }, { idempotencyKey: newIdempotencyKey() });
       setOpen(false);
       setTyped("");
       toast.success("Test data deleted");
@@ -257,7 +333,7 @@ export function DangerSection() {
           </DialogHeader>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="danger-confirm">Type {name} to confirm</Label>
-            <Input id="danger-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus className="h-10" />
+            <Input id="danger-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoFocus maxLength={rules.businessName.maxLength} autoComplete="off" className="h-10" />
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)} className="h-9">

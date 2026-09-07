@@ -14,6 +14,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, KeyRound, Pencil, Send } from "lucide-react";
 import { toast } from "sonner";
+import { fieldError } from "@/lib/forms/field-error";
+import { endpointUrlCopy } from "@/lib/forms/rules";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
@@ -68,9 +70,10 @@ export function EndpointDetail({ endpointId }: { endpointId: string }) {
       await fn();
       await reload();
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Something went wrong";
-      if (onError) onError(msg);
-      else toast.error(msg);
+      // FR-DSH-115: a rejection naming the URL goes to the form in its own words; anything else toasts.
+      const f = fieldError(e, { url: endpointUrlCopy });
+      if (onError && f) onError(f.message);
+      else toast.error(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setBusy(false);
     }

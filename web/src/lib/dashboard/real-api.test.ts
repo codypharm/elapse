@@ -63,6 +63,24 @@ describe("real DashboardApi", () => {
     expect(calls[1]!.headers["idempotency-key"]).toBeUndefined();
   });
 
+  it("FR_DSH_100_blank_support_fields_are_sent_as_null_and_trimmed_values_as_is", async () => {
+    // A merchant saving only the business name must not be refused because the support fields are empty.
+    responses = [{ ...profile, name: "Acme" }];
+    await api().updateMerchant({ name: "  Acme ", supportEmail: "", supportUrl: "  " });
+    expect(calls[0]!.body).toEqual({ name: "Acme", support_email: null, support_url: null });
+    responses = [profile];
+    await api().updateMerchant({ supportEmail: " help@acme.test ", supportUrl: "https://acme.test/help " });
+    expect(calls[1]!.body).toEqual({ support_email: "help@acme.test", support_url: "https://acme.test/help" });
+  });
+
+  it("FR_DSH_118_search_text_is_encoded_before_it_enters_a_path", async () => {
+    responses = [{ __status: 404 }];
+    expect(await api().resolveSearch("test", "sub_x/../me?y#z")).toBeNull();
+    expect(calls[0]!.url).toBe(`${BASE}/v1/subscriptions/sub_x%2F..%2Fme%3Fy%23z`);
+    responses = [{ id: "sub_ok" }];
+    expect(await api().resolveSearch("test", " sub_ok ")).toBe("/dashboard/subscriptions/sub_ok");
+  });
+
   it("listKeys splits the publishable key from the secret rows; createKey returns the secret once", async () => {
     responses = [{ object: "list", data: [
       { id: "key_p", kind: "pk", name: "default", livemode: false, last4: "abcd", redacted: "pk_test_x", publishable_key: "pk_test_x", created: T0, last_used_at: null, revoked_at: null, expires_at: null },
