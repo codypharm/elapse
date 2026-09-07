@@ -9,7 +9,7 @@
  *
  * No judge mode: that panel lives on the checkout alone (FR-CHK-026).
  *
- * Maps to: FR-CHK-016–026; BR-CHK-001, BR-CHK-007.
+ * Maps to: FR-CHK-016–026, FR-CHK-030; BR-CHK-001, BR-CHK-007.
  */
 "use client";
 
@@ -51,6 +51,7 @@ export function AccountPage({
   const [busy, setBusy] = useState(false);
   const [authOpen, setAuthOpen] = useState(false);
   const [stopping, setStopping] = useState<AccountMeter | null>(null);
+  const [pending, setPending] = useState<{ subscription: string; action: "pause" | "resume" } | null>(null);
   const [openReceipt, setOpenReceipt] = useState<AccountReceipt | null>(null);
   const [receiptLimit, setReceiptLimit] = useState(RECEIPTS_SHOWN);
 
@@ -83,6 +84,23 @@ export function AccountPage({
       .catch(() => toast.error("Could not sign you in"))
       .finally(() => setBusy(false));
   }, [api]);
+
+  // FR-CHK-030: one tap, no sheet — nothing is charged or refunded and it reverses.
+  const toggle = useCallback(
+    async (m: AccountMeter, action: "pause" | "resume") => {
+      setBusy(true);
+      setPending({ subscription: m.subscription, action });
+      try {
+        setView(await (action === "pause" ? api.pause(m.subscription) : api.resume(m.subscription)));
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : `Could not ${action} the meter`);
+      } finally {
+        setBusy(false);
+        setPending(null);
+      }
+    },
+    [api],
+  );
 
   const confirmStop = useCallback(async () => {
     if (!stopping) return;
@@ -165,7 +183,10 @@ export function AccountPage({
                   key={m.subscription}
                   meter={m}
                   busy={busy}
+                  pending={pending?.subscription === m.subscription ? pending.action : null}
                   onStop={() => setStopping(m)}
+                  onPause={() => toggle(m, "pause")}
+                  onResume={() => toggle(m, "resume")}
                 />
               ))}
             </section>

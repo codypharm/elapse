@@ -56,7 +56,18 @@ FR-CON-073 **passed 2026-09-05**: a fresh `envio dev` in `indexer/` synced from 
 `Stream.status == Canceled`, `settledSeconds 220`, `settledAmount 880000`, `settledFee 8800`,
 `refunded 13520000`, four ledger rows, all five logs `ingestStatus: sent` to the local API.
 
-## Current testnet deployment (2026-09-05, keeper cancel)
+## Current testnet deployment (2026-09-07, relayed pause/resume)
+
+| | |
+| --- | --- |
+| Factory | [`0x4B768dA0D29C084145f23Cd06b3b5fc2e07a2840`](https://testnet.monadscan.com/address/0x4B768dA0D29C084145f23Cd06b3b5fc2e07a2840) |
+| Implementation | `0x3Ccb83A576FD4f8b30b1E46441d89CD2AF4D5586` |
+| MockUSD | `0xD9E7Fc7d58D97daC5dc5501404fc1073A8aBE6C1` |
+| Keeper (relayer) | `0x54669B09A651a72Bd0367caB21cdAd0bEC0a7d35`, set in the deploy run |
+| Block | 60525591, tx `0xe443fae1…4d2611` |
+| Why | FR-CON-018: `pauseFor`/`resumeFor` signed relays, `relayNonce` shared with `cancelFor` ([ADR](../docs/decisions/2026-09-07-subscriber-pause-signed-relay.md)) |
+
+## Previous testnet deployment (2026-09-05, keeper cancel)
 
 | | |
 | --- | --- |

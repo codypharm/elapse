@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRealCheckoutApi, mapSession, type SubscriberWallet } from "./real-api";
-import { CheckoutApiError } from "./mock-api";
 
 const BASE = "http://api.test";
 const T0 = 1_757_000_000;
@@ -178,10 +177,39 @@ describe("real CheckoutApi", () => {
     await expect(a.startAgain("cs_abc")).rejects.toMatchObject({ message: "This product is no longer available." });
   });
 
-  it("API errors carry the server message and pause is not offered", async () => {
+  it("API errors carry the server message", async () => {
     responses = [{ __status: 409, error: { type: "invalid_request_error", code: "already_started", message: "This session has already started." } }];
     await expect(api().start("cs_abc")).rejects.toMatchObject({ code: "invalid_state", message: "This session has already started." });
-    await expect(api().pause("cs_abc")).rejects.toBeInstanceOf(CheckoutApiError);
+  });
+
+  it("FR_CHK_030_pause_fetches_the_message_signs_it_posts_it_and_polls_to_paused_then_resume_polls_to_active", async () => {
+    const a = api();
+    responses = [
+      { subscription: "sub_1", stream_address: "0x1", chain_id: 10143, nonce: "3", deadline: String(T0 + 600), message: "0x" + "ee".repeat(32) },
+      { subscription: "sub_1", pending_tx: "0x" + "33".repeat(32) },
+      wireSession({ status: "complete", subscription: wireSub({ status: "active", started_at: T0, stream_address: "0x1" }) }),
+      wireSession({ status: "complete", subscription: wireSub({ status: "paused", started_at: T0, paused_at: T0 + 30, stream_address: "0x1" }) }),
+    ];
+    const paused = await a.pause("cs_abc");
+    expect(wallet.signMessage).toHaveBeenCalledWith("0x" + "ee".repeat(32));
+    expect(calls.find((c) => c.url.endsWith("/pause/prepare"))?.method).toBe("POST");
+    expect(calls.find((c) => c.url.endsWith("/pause"))?.body).toEqual({ signature: "0x" + "cd".repeat(65), deadline: String(T0 + 600) });
+    expect(paused.subscription).toMatchObject({ status: "paused", pausedAt: (T0 + 30) * 1000 });
+
+    calls = [];
+    responses = [
+      { subscription: "sub_1", stream_address: "0x1", chain_id: 10143, nonce: "4", deadline: String(T0 + 700), message: "0x" + "ff".repeat(32) },
+      { subscription: "sub_1", pending_tx: "0x" + "44".repeat(32) },
+      wireSession({ status: "complete", subscription: wireSub({ status: "active", started_at: T0, stream_address: "0x1" }) }),
+    ];
+    const resumed = await a.resume("cs_abc");
+    expect(calls.find((c) => c.url.endsWith("/resume"))?.body).toEqual({ signature: "0x" + "cd".repeat(65), deadline: String(T0 + 700) });
+    expect(resumed.subscription).toMatchObject({ status: "active", pausedAt: null });
+  });
+
+  it("FR_CHK_030_a_pause_rate_limit_reads_as_too_many_changes", async () => {
+    responses = [{ __status: 429, error: { type: "rate_limit_error", code: "rate_limited", message: "Too many changes. Try again in a bit." } }];
+    await expect(api().pause("cs_abc")).rejects.toMatchObject({ code: "rate_limited", message: "Too many changes. Try again in a bit." });
   });
 
   it("FR-CHK-027: a stale token is refreshed and the call retried once; a second 401 or a 403 means sign in again; 503 means not set up", async () => {

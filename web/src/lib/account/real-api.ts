@@ -17,7 +17,7 @@ export interface WireAccountSubscription {
   checkout_session?: string | null;
   restarted_as?: string | null;
   merchant: { name: string; logo_url: string | null; support_url: string | null };
-  product: { name: string; rate_usd_per_second: string };
+  product: { name: string; rate_usd_per_second: string; allow_pause?: boolean };
   started_at: number | null;
   paused_at: number | null;
   canceled_at: number | null;
@@ -51,6 +51,7 @@ export function meterFrom(w: WireAccountSubscription): AccountMeter {
     merchant: merchantOf(w.merchant),
     product: { name: w.product.name, rateUsdPerSecond: w.product.rate_usd_per_second },
     status: w.status === "paused" ? "paused" : "active",
+    ...(w.product.allow_pause ? { allowPause: true } : {}),
     startedAt: ms(w.started_at) ?? 0,
     pausedAt: ms(w.paused_at),
     maxDurationSeconds: w.max_duration_seconds,
@@ -115,9 +116,32 @@ export function createRealAccountApi(o: RealAccountOptions): AccountApi {
       if (res.status === 401) throw new SignedOut();
       if (res.status === 404) throw new AccountApiError("not_found", "That meter is not yours or no longer exists.");
       if (res.status === 429 && code === "receipt_already_sent") throw new AccountApiError("already_sent", "Already sent. Check your inbox.");
+      if (res.status === 429) throw new AccountApiError("rate_limited", json?.error?.message ?? "Too many changes. Try again in a bit.");
       throw new AccountApiError(res.status >= 500 ? "network" : "invalid_state", json?.error?.message ?? "Something went wrong.");
     }
     return json as T;
+  }
+
+  /**
+   * Prepare → sign (EIP-191 over the 32 bytes) → submit one relayed action (FR-CON-017/018),
+   * then poll the list until the subscription's row satisfies `done`.
+   */
+  async function relay(subscription: string, action: "cancel" | "pause" | "resume", done: (r: WireAccountSubscription) => boolean) {
+    const w = o.wallet();
+    if (!w) throw new SignedOut();
+    const auth = await call<{ message: `0x${string}`; deadline: string }>("POST", `/v1/account/subscriptions/${subscription}/${action}/prepare`, {});
+    const signature = await w.signMessage(auth.message);
+    await call("POST", `/v1/account/subscriptions/${subscription}/${action}`, { signature, deadline: auth.deadline });
+    const deadline = Date.now() + timeout;
+    let rows = await list();
+    let row = rows.find((r) => r.id === subscription && done(r));
+    while (!row && Date.now() < deadline) {
+      await sleep(1500);
+      rows = await list();
+      row = rows.find((r) => r.id === subscription && done(r));
+    }
+    if (!row) throw new AccountApiError("network", "The network is taking longer than usual. Your meter will update shortly.");
+    return { row, rows };
   }
 
   const list = async () => (await call<{ data: WireAccountSubscription[] }>("GET", "/v1/account/subscriptions")).data;
@@ -137,21 +161,16 @@ export function createRealAccountApi(o: RealAccountOptions): AccountApi {
     signIn: view,
 
     async cancel(subscription) {
-      const w = o.wallet();
-      if (!w) throw new SignedOut();
-      const auth = await call<{ message: `0x${string}`; deadline: string }>("POST", `/v1/account/subscriptions/${subscription}/cancel/prepare`, {});
-      const signature = await w.signMessage(auth.message);
-      await call("POST", `/v1/account/subscriptions/${subscription}/cancel`, { signature, deadline: auth.deadline });
-      const deadline = Date.now() + timeout;
-      let rows = await list();
-      let done = rows.find((r) => r.id === subscription && r.status === "canceled");
-      while (!done && Date.now() < deadline) {
-        await sleep(1500);
-        rows = await list();
-        done = rows.find((r) => r.id === subscription && r.status === "canceled");
-      }
-      if (!done) throw new AccountApiError("network", "The network is taking longer than usual. Your meter will update shortly.");
-      return { receipt: receiptFrom(done), view: viewFrom(rows) };
+      const { row, rows } = await relay(subscription, "cancel", (r) => r.status === "canceled");
+      return { receipt: receiptFrom(row), view: viewFrom(rows) };
+    },
+
+    // FR-CHK-030: the same prepare → sign → submit → poll as cancel; no money moves.
+    async pause(subscription) {
+      return viewFrom((await relay(subscription, "pause", (r) => r.status !== "active")).rows);
+    },
+    async resume(subscription) {
+      return viewFrom((await relay(subscription, "resume", (r) => r.status !== "paused")).rows);
     },
 
     async emailReceipt(subscription) {

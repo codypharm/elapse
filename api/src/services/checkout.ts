@@ -17,7 +17,7 @@ import { findSubscription, insertSubscription, type SubscriptionRow } from "../d
 import { chainClient } from "../chain/relayer";
 import { deploymentFor, escrowTokenFor, isMintable } from "../chain/deployments";
 import { buildPermitTypedData, recoverPermitSigner, splitSignature, PERMIT_TYPES, type PermitDomain } from "../chain/permit";
-import { cancelInnerHash, recoverCancelSigner } from "../chain/cancel-auth";
+import { relayInnerHash, recoverCancelSigner, type RelayAction } from "../chain/cancel-auth";
 import { baseUnitsToDecimal } from "../lib/money";
 import { config } from "../config";
 
@@ -27,6 +27,9 @@ const MAX_CAP = 2_592_000;
 
 export type CheckoutErrorCode =
   | "not_running"
+  | "invalid_state"
+  | "pause_not_allowed"
+  | "rate_limited"
   | "session_not_open"
   | "cap_fixed"
   | "invalid_cap"
@@ -181,6 +184,8 @@ export async function startSession(input: { session: CheckoutSessionRow; signatu
 }
 
 export const CANCEL_TTL_SECONDS = 600;
+/** Pause-or-resume submissions per Subscription per hour (FR-API-047); each is a relayer tx and a merchant webhook. */
+export const PAUSE_RESUME_PER_HOUR = 10;
 
 /** A Subscription that can be canceled on chain right now: it has a stream and is active or paused. */
 async function runningSubscription(session: CheckoutSessionRow): Promise<SubscriptionRow> {
@@ -192,11 +197,29 @@ async function runningSubscription(session: CheckoutSessionRow): Promise<Subscri
 }
 
 /**
- * Step one of a subscriber cancel (FR-CON-017, checkout FR-CHK-008): the 32 bytes the wallet
- * signs with a personal-sign, bound to this stream, its current nonce and a 10-minute deadline.
+ * The Subscription a relayed action may apply to (FR-API-044/045): cancel takes any running
+ * meter; pause needs `active` on a Product that allows it; resume needs `paused`. `allow_pause`
+ * is not re-checked on resume: a meter paused while the flag was on may always resume.
  */
-export async function prepareCancel(input: { session: CheckoutSessionRow; walletAddress: string; now?: number }) {
-  const sub = await runningSubscription(input.session);
+async function actionableSubscription(session: CheckoutSessionRow, action: RelayAction): Promise<SubscriptionRow> {
+  const sub = await runningSubscription(session);
+  if (action === "pause") {
+    if (sub.status !== "active") throw new CheckoutStateError("invalid_state", "The meter is already paused.");
+    const product = await findProduct(session.merchant_id, session.livemode, session.product_id);
+    if (!product?.allow_pause) throw new CheckoutStateError("pause_not_allowed", "This product cannot be paused.");
+  } else if (action === "resume" && sub.status !== "paused") {
+    throw new CheckoutStateError("invalid_state", "The meter is not paused.");
+  }
+  return sub;
+}
+
+/**
+ * Step one of a relayed action (FR-CON-017/018, checkout FR-CHK-008/030): the 32 bytes the
+ * wallet signs with a personal-sign, bound to this stream, the action, its current nonce and a
+ * 10-minute deadline.
+ */
+export async function prepareRelay(action: RelayAction, input: { session: CheckoutSessionRow; walletAddress: string; now?: number }) {
+  const sub = await actionableSubscription(input.session, action);
   // FR-API-120: the identity token must belong to the Customer on this session (403 subscriber_mismatch).
   const [customer] = await sql`SELECT wallet_address FROM customers WHERE id = ${sub.customer_id}`;
   if ((customer!.wallet_address as string).toLowerCase() !== input.walletAddress.toLowerCase()) {
@@ -204,7 +227,7 @@ export async function prepareCancel(input: { session: CheckoutSessionRow; wallet
   }
   const now = input.now ?? Math.floor(Date.now() / 1000);
   const stream = sub.stream_address as Address;
-  const nonce = await chainClient().readCancelNonce(sub.chain_id, stream);
+  const nonce = await chainClient().readRelayNonce(sub.chain_id, stream);
   const deadline = BigInt(now + CANCEL_TTL_SECONDS);
   return {
     subscription: sub.id,
@@ -212,29 +235,52 @@ export async function prepareCancel(input: { session: CheckoutSessionRow; wallet
     chain_id: sub.chain_id,
     nonce: nonce.toString(),
     deadline: deadline.toString(),
-    message: cancelInnerHash({ chainId: sub.chain_id, stream, nonce, deadline }),
+    message: relayInnerHash(action, { chainId: sub.chain_id, stream, nonce, deadline }),
   };
 }
 
-/** Step two: verify the signature is the subscriber's, then the relayer submits `cancelFor`. `canceled` arrives via ingest. */
-export async function cancelSubscription(input: { session: CheckoutSessionRow; signature: string; deadline: string; now?: number }): Promise<{ subscription: string; pending_tx: Hex }> {
-  const sub = await runningSubscription(input.session);
+/**
+ * Step two: verify the signature is the subscriber's, then the relayer submits
+ * `cancelFor` / `pauseFor` / `resumeFor`. The new status arrives via ingest (BR-API-005).
+ * Pause and resume are counted per Subscription per hour (FR-API-047) and audited.
+ */
+export async function submitRelay(action: RelayAction, input: { session: CheckoutSessionRow; signature: string; deadline: string; ip?: string | null; now?: number }): Promise<{ subscription: string; pending_tx: Hex }> {
+  const sub = await actionableSubscription(input.session, action);
   const now = input.now ?? Math.floor(Date.now() / 1000);
   if (!/^\d{1,12}$/.test(input.deadline)) throw new CheckoutStateError("permit_expired", "Invalid deadline.");
   const deadline = BigInt(input.deadline);
-  if (deadline <= BigInt(now)) throw new CheckoutStateError("permit_expired", "The cancel authorisation expired; ask for a new message.");
+  if (deadline <= BigInt(now)) throw new CheckoutStateError("permit_expired", `The ${action} authorisation expired; ask for a new message.`);
   const stream = sub.stream_address as Address;
   const chain = chainClient();
-  const nonce = await chain.readCancelNonce(sub.chain_id, stream);
-  const inner = cancelInnerHash({ chainId: sub.chain_id, stream, nonce, deadline });
+  const nonce = await chain.readRelayNonce(sub.chain_id, stream);
+  const inner = relayInnerHash(action, { chainId: sub.chain_id, stream, nonce, deadline });
   const [customer] = await sql`SELECT wallet_address FROM customers WHERE id = ${sub.customer_id}`;
   const signer = await recoverCancelSigner(inner, input.signature);
   if (!signer || signer !== (customer!.wallet_address as string).toLowerCase()) {
     throw new CheckoutStateError("bad_signature", "The signature does not match the subscriber's wallet.");
   }
-  const pendingTx = await chain.cancelFor(sub.chain_id, stream, deadline, input.signature as Hex);
+  if (action !== "cancel") {
+    const [{ n }] = await sql`SELECT count(*)::int AS n FROM audit_log
+      WHERE action IN ('subscription.pause', 'subscription.resume') AND target = ${sub.id} AND at > now() - interval '1 hour'`;
+    if (n >= PAUSE_RESUME_PER_HOUR) throw new CheckoutStateError("rate_limited", "Too many changes. Try again in a bit.");
+  }
+  const submit = action === "cancel" ? chain.cancelFor : action === "pause" ? chain.pauseFor : chain.resumeFor;
+  const pendingTx = await submit.call(chain, sub.chain_id, stream, deadline, input.signature as Hex);
   await sql`UPDATE subscriptions SET updated_at = now() WHERE id = ${sub.id}`;
+  if (action !== "cancel") {
+    await sql`INSERT INTO audit_log (merchant_id, actor, action, target, ip) VALUES (${sub.merchant_id}, 'checkout', ${`subscription.${action}`}, ${sub.id}, ${input.ip ?? null})`;
+  }
   return { subscription: sub.id, pending_tx: pendingTx };
+}
+
+/** Step one of a subscriber cancel (FR-CON-017, checkout FR-CHK-008). */
+export function prepareCancel(input: { session: CheckoutSessionRow; walletAddress: string; now?: number }) {
+  return prepareRelay("cancel", input);
+}
+
+/** Step two of a subscriber cancel: the relayer submits `cancelFor`; `canceled` arrives via ingest. */
+export function cancelSubscription(input: { session: CheckoutSessionRow; signature: string; deadline: string; now?: number }) {
+  return submitRelay("cancel", input);
 }
 
 /** Merchant-initiated cancel (FR-API-042): the relayer is the factory keeper (FR-CON-054) and calls `cancel()` directly. */

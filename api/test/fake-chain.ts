@@ -9,6 +9,8 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
   const mints: Array<{ to: string; amount: bigint }> = [];
   const creates: CreateWithPermitArgs[] = [];
   const cancels: Array<{ stream: string; deadline: bigint; signature: string }> = [];
+  const pauses: Array<{ stream: string; deadline: bigint; signature: string }> = [];
+  const resumes: Array<{ stream: string; deadline: bigint; signature: string }> = [];
   const keeperCancels: string[] = [];
   const settleBatches: Array<{ chainId: number; streams: string[]; gas: bigint }> = [];
   /** Per-stream direct settle estimate, or an Error to make the direct call revert (FR-WRK-072). Default 210_000. */
@@ -20,7 +22,8 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
   const state = { failNextSettle: null as Error | null, receiptLogs: null as number | null };
   const cancelNonces = new Map<string, bigint>();
   let n = 0;
-  const hash = () => ("0x" + (++n).toString(16).padStart(64, "0")) as Hex;
+  // Own hash space (`0xfa…`): the ingest fixtures count from 0x…1 too, and a shared value would deduplicate a log.
+  const hash = () => ("0xfa" + (++n).toString(16).padStart(62, "0")) as Hex;
   const client: ChainClient = {
     address: "0xaf1444abf40afc91bcb4a6793765553c6bccea0d",
     async readPermitDomain(_c, token) {
@@ -42,7 +45,7 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
       nonces.set(args.subscriber.toLowerCase(), (nonces.get(args.subscriber.toLowerCase()) ?? 0n) + 1n);
       return hash();
     },
-    async readCancelNonce(_c, stream) {
+    async readRelayNonce(_c, stream) {
       return cancelNonces.get(stream.toLowerCase()) ?? 0n;
     },
     async estimateSettle(_c, stream) {
@@ -80,9 +83,19 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
       cancelNonces.set(stream.toLowerCase(), (cancelNonces.get(stream.toLowerCase()) ?? 0n) + 1n);
       return hash();
     },
+    async pauseFor(_c, stream, deadline, signature) {
+      pauses.push({ stream: stream.toLowerCase(), deadline, signature });
+      cancelNonces.set(stream.toLowerCase(), (cancelNonces.get(stream.toLowerCase()) ?? 0n) + 1n);
+      return hash();
+    },
+    async resumeFor(_c, stream, deadline, signature) {
+      resumes.push({ stream: stream.toLowerCase(), deadline, signature });
+      cancelNonces.set(stream.toLowerCase(), (cancelNonces.get(stream.toLowerCase()) ?? 0n) + 1n);
+      return hash();
+    },
   };
   return {
-    client, mints, creates, cancels, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces,
+    client, mints, creates, cancels, pauses, resumes, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces,
     set failNextSettle(e: Error | null) {
       state.failNextSettle = e;
     },
@@ -91,6 +104,6 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
       state.receiptLogs = n;
     },
     setNonce: (a: Address, v: bigint) => nonces.set(a.toLowerCase(), v),
-    setCancelNonce: (s: string, v: bigint) => cancelNonces.set(s.toLowerCase(), v),
+    setRelayNonce: (s: string, v: bigint) => cancelNonces.set(s.toLowerCase(), v),
   };
 }

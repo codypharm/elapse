@@ -44,7 +44,7 @@ export const permitTokenAbi = [
 ] as const;
 
 export const streamAbi = [
-  { type: "function", name: "cancelNonce", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "relayNonce", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "cancel", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "settle", stateMutability: "nonpayable", inputs: [], outputs: [] },
   { type: "function", name: "status", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
@@ -57,6 +57,20 @@ export const streamAbi = [
   {
     type: "function",
     name: "cancelFor",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "deadline", type: "uint256" }, { name: "signature", type: "bytes" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "pauseFor",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "deadline", type: "uint256" }, { name: "signature", type: "bytes" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "resumeFor",
     stateMutability: "nonpayable",
     inputs: [{ name: "deadline", type: "uint256" }, { name: "signature", type: "bytes" }],
     outputs: [],

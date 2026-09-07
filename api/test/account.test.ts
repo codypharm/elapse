@@ -99,7 +99,7 @@ describe("FR-API-121 account subscriptions", () => {
 describe("FR-API-123 account cancel", () => {
   it("FR_API_123_cancel_prepare_then_cancel_submits_cancelFor_for_the_callers_meter_only", async () => {
     const { subId } = await liveSession(m);
-    chain.setCancelNonce(STREAM, 0n);
+    chain.setRelayNonce(STREAM, 0n);
     const prep = await api("POST", `/v1/account/subscriptions/${subId}/cancel/prepare`, { body: {}, headers: await identity() });
     expect(prep.status).toBe(200);
     expect(prep.body).toMatchObject({ subscription: subId, chain_id: 10143, nonce: "0" });

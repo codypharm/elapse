@@ -12,7 +12,8 @@ import { findCheckoutSession } from "../db/checkout-sessions";
 import { ApiError, invalid } from "../lib/errors";
 import { sendEmail } from "../lib/email";
 import { router } from "../lib/openapi";
-import { cancelSubscription, prepareCancel } from "../services/checkout";
+import { clientIp } from "../middleware/auth";
+import { cancelSubscription, prepareCancel, prepareRelay, submitRelay } from "../services/checkout";
 import { CancelBody, CancelPrepareResponse, StartResponse, mapCheckoutError, subscriberIdentity } from "./checkout-sessions";
 
 export const RECEIPT_EMAIL_INTERVAL_S = 600;
@@ -26,7 +27,7 @@ const AccountSubscriptionSchema = z
     checkout_session: z.string().nullable(),
     restarted_as: z.string().nullable(),
     merchant: z.object({ name: z.string(), logo_url: z.string().nullable(), support_url: z.string().nullable() }),
-    product: z.object({ name: z.string(), rate_usd_per_second: z.string() }),
+    product: z.object({ name: z.string(), rate_usd_per_second: z.string(), allow_pause: z.boolean() }),
     started_at: z.number().int().nullable(),
     paused_at: z.number().int().nullable(),
     canceled_at: z.number().int().nullable(),
@@ -124,6 +125,55 @@ account.openapi(
     }
   },
 );
+
+// ─── Pause / resume from the account (FR-API-046, checkout FR-CHK-018/030) ────────────────────
+
+for (const action of ["pause", "resume"] as const) {
+  account.openapi(
+    createRoute({
+      method: "post",
+      path: `/account/subscriptions/{id}/${action}/prepare`,
+      operationId: `account.subscriptions.${action}.prepare`,
+      tags: ["Account"],
+      hide: true,
+      request: { params: z.object({ id: z.string() }) },
+      responses: { 200: { description: `The message the subscriber's wallet signs to ${action} the meter.`, content: { "application/json": { schema: CancelPrepareResponse } } } },
+    }),
+    async (c) => {
+      const who = await subscriberIdentity(c);
+      const { session } = await ownSubscription(who.walletAddress, c.req.valid("param").id);
+      if (!session) throw new ApiError(409, "invalid_request_error", "There is no running meter on this subscription.", undefined, "not_running");
+      try {
+        return c.json(await prepareRelay(action, { session, walletAddress: who.walletAddress }), 200);
+      } catch (e) {
+        mapCheckoutError(e);
+      }
+    },
+  );
+
+  account.openapi(
+    createRoute({
+      method: "post",
+      path: `/account/subscriptions/{id}/${action}`,
+      operationId: `account.subscriptions.${action}`,
+      tags: ["Account"],
+      hide: true,
+      request: { params: z.object({ id: z.string() }), body: { content: { "application/json": { schema: CancelBody } }, required: true } },
+      responses: { 202: { description: `Submitted; the new status arrives when the chain confirms. No money moves.`, content: { "application/json": { schema: StartResponse } } } },
+    }),
+    async (c) => {
+      const who = await subscriberIdentity(c);
+      const { signature, deadline } = c.req.valid("json");
+      const { session } = await ownSubscription(who.walletAddress, c.req.valid("param").id);
+      if (!session) throw new ApiError(409, "invalid_request_error", "There is no running meter on this subscription.", undefined, "not_running");
+      try {
+        return c.json(await submitRelay(action, { session, signature, deadline, ip: clientIp(c) }), 202);
+      } catch (e) {
+        mapCheckoutError(e);
+      }
+    },
+  );
+}
 
 const fmt = (t: number | null) => (t === null ? "—" : new Date(t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC");
 

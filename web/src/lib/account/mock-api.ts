@@ -26,7 +26,7 @@ export type AccountSeed = (typeof ACCOUNT_SEEDS)[number];
 
 export class AccountApiError extends Error {
   constructor(
-    public code: "not_found" | "invalid_state" | "network" | "already_sent",
+    public code: "not_found" | "invalid_state" | "network" | "already_sent" | "rate_limited",
     message: string,
   ) {
     super(message);
@@ -39,6 +39,10 @@ export interface AccountApi {
   /** Passkey / Face ID sign-in; the mock resolves after the confirm sheet. */
   signIn(): Promise<AccountView>;
   cancel(subscription: string): Promise<{ receipt: AccountReceipt; view: AccountView }>;
+  /** Pause a running meter the product allows to pause; nothing is charged while paused (FR-CHK-030). */
+  pause(subscription: string): Promise<AccountView>;
+  /** Resume a paused meter; the paused span is never billed (FR-CHK-030). */
+  resume(subscription: string): Promise<AccountView>;
   emailReceipt(subscription: string): Promise<{ sent: true }>;
   /** Opens a follow-on session for the receipt's session and returns where to go (FR-CHK-020, FR-API-126). */
   startAgain(session: string): Promise<{ url: string }>;
@@ -93,6 +97,7 @@ function seedState(seed: AccountSeed, now: number): { meters: AccountMeter[]; re
       subscription: "sub_9fKq2",
       merchant: NIMBUS,
       product: GPU,
+      allowPause: true,
       startedAt: now - 214_000,
       maxDurationSeconds: 3600,
     }),
@@ -211,6 +216,27 @@ export function createMockAccountApi(
       if (!m) throw new AccountApiError("not_found", "That meter is not running");
       const receipt = settle(m, now(), "canceled");
       return { receipt, view: view() };
+    },
+
+    async pause(subscription) {
+      await wait();
+      const m = state.meters.find((x) => x.subscription === subscription);
+      if (!m || !m.allowPause) throw new AccountApiError("invalid_state", "This meter cannot be paused.");
+      if (m.status === "paused") throw new AccountApiError("invalid_state", "The meter is already paused.");
+      m.status = "paused";
+      m.pausedAt = now();
+      return view();
+    },
+
+    async resume(subscription) {
+      await wait();
+      const m = state.meters.find((x) => x.subscription === subscription);
+      if (!m || m.status !== "paused" || m.pausedAt === null) throw new AccountApiError("invalid_state", "The meter is not paused.");
+      // Shift start forward by the paused span so elapsed excludes the pause.
+      m.startedAt += now() - m.pausedAt;
+      m.status = "active";
+      m.pausedAt = null;
+      return view();
     },
 
     async startAgain(session) {

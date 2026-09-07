@@ -17,6 +17,7 @@ interface AccountRow extends SubscriptionRow {
   merchant_support_url: string | null;
   receipt_emailed_at: Date | null;
   restarted_as: string | null;
+  product_allow_pause: boolean | null;
 }
 
 const COLS = sql`s.id, s.merchant_id, s.livemode, s.product_id, s.customer_id, s.checkout_session_id, s.status, s.ended_reason, s.chain_id,
@@ -26,6 +27,7 @@ const COLS = sql`s.id, s.merchant_id, s.livemode, s.product_id, s.customer_id, s
   s.receipt_emailed_at,
   (SELECT n.id FROM checkout_sessions n WHERE n.again_of = s.checkout_session_id ORDER BY n.created_at DESC LIMIT 1) AS restarted_as,
   p.name AS product_name,
+  p.allow_pause AS product_allow_pause,
   COALESCE(m.branding->>'display_name', m.name) AS merchant_name,
   m.branding->>'logo_url' AS merchant_logo_url,
   m.branding->>'support_url' AS merchant_support_url`;
@@ -69,7 +71,7 @@ export function serializeAccountSubscription(row: AccountRow, now = Math.floor(D
     checkout_session: row.checkout_session_id,
     restarted_as: row.restarted_as,
     merchant: { name: row.merchant_name, logo_url: row.merchant_logo_url, support_url: row.merchant_support_url },
-    product: { name: row.product_name ?? "", rate_usd_per_second: s.rate_usd_per_second },
+    product: { name: row.product_name ?? "", rate_usd_per_second: s.rate_usd_per_second, allow_pause: Boolean(row.product_allow_pause) },
     started_at: s.started_at,
     paused_at: s.paused_at,
     canceled_at: s.canceled_at,

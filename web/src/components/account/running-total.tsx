@@ -25,6 +25,8 @@ export function RunningTotal({ meters }: { meters: AccountMeter[] }) {
   }, [anyRunning]);
 
   if (meters.length === 0) return null;
+  const pausedCount = meters.filter((m) => m.pausedAt).length;
+  const runningCount = meters.length - pausedCount;
 
   let accrued = 0n;
   let rate = 0n;
@@ -38,7 +40,8 @@ export function RunningTotal({ meters }: { meters: AccountMeter[] }) {
     <section className="rounded-xl border border-border bg-card px-5 py-4 lg:flex lg:items-end lg:justify-between lg:gap-6">
       <div>
         <p className="placard">
-          {meters.length} {meters.length === 1 ? "meter" : "meters"} running
+          {runningCount} {runningCount === 1 ? "meter" : "meters"} running
+          {pausedCount > 0 && ` · ${pausedCount} paused`}
         </p>
         <p className="numerals mt-1 text-[2rem] leading-none text-live">{formatUsd(accrued, 3)}</p>
       </div>

@@ -1,18 +1,27 @@
 /**
- * Relayed cancel authorisation (contracts FR-CON-017). A party signs, EIP-191 personal-sign,
- * the 32 bytes `keccak256(abi.encode("ElapseCancel", chainid, stream, nonce, deadline))`; the
- * relayer submits `cancelFor(deadline, signature)` and pays the gas. The per-stream nonce is
- * read from the chain so a captured signature cannot be replayed.
+ * Relayed action authorisations (contracts FR-CON-017 cancel, FR-CON-018 pause/resume). A party
+ * signs, EIP-191 personal-sign, the 32 bytes `keccak256(abi.encode(tag, chainid, stream, nonce,
+ * deadline))` where the tag names the action, so a signed pause can never be submitted as a
+ * resume or a cancel; the relayer submits `<action>For(deadline, signature)` and pays the gas.
+ * The per-stream `relayNonce` is read from the chain so a captured signature cannot be replayed.
  */
 import { encodeAbiParameters, hashMessage, isHex, keccak256, recoverMessageAddress, type Address, type Hex } from "viem";
 
-export function cancelInnerHash(input: { chainId: number; stream: Address | string; nonce: bigint; deadline: bigint }): Hex {
+export type RelayAction = "cancel" | "pause" | "resume";
+
+const TAG: Record<RelayAction, string> = { cancel: "ElapseCancel", pause: "ElapsePause", resume: "ElapseResume" };
+
+export function relayInnerHash(action: RelayAction, input: { chainId: number; stream: Address | string; nonce: bigint; deadline: bigint }): Hex {
   return keccak256(
     encodeAbiParameters(
       [{ type: "string" }, { type: "uint256" }, { type: "address" }, { type: "uint256" }, { type: "uint256" }],
-      ["ElapseCancel", BigInt(input.chainId), input.stream as Address, input.nonce, input.deadline],
+      [TAG[action], BigInt(input.chainId), input.stream as Address, input.nonce, input.deadline],
     ),
   );
+}
+
+export function cancelInnerHash(input: { chainId: number; stream: Address | string; nonce: bigint; deadline: bigint }): Hex {
+  return relayInnerHash("cancel", input);
 }
 
 /** What the contract's `cancelDigest` computes; useful for tests and debugging. */

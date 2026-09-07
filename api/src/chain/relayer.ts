@@ -33,8 +33,8 @@ export interface ChainClient {
   mintMock(chainId: number, token: Address, to: Address, amount: bigint): Promise<Hex>;
   /** Submits `StreamFactory.createWithPermit`; resolves with the tx hash as soon as it is broadcast. */
   createWithPermit(args: CreateWithPermitArgs): Promise<Hex>;
-  /** Per-stream replay nonce for `cancelFor` (FR-CON-017). */
-  readCancelNonce(chainId: number, stream: Address): Promise<bigint>;
+  /** Per-stream replay nonce shared by `cancelFor`, `pauseFor` and `resumeFor` (FR-CON-017/018). */
+  readRelayNonce(chainId: number, stream: Address): Promise<bigint>;
   /**
    * Gas for `settle()` called directly on one stream (FR-WRK-072). Rejects when the call would
    * revert; that is the honest signal the factory's try/catch hides.
@@ -56,6 +56,10 @@ export interface ChainClient {
   cancel(chainId: number, stream: Address): Promise<Hex>;
   /** Submits `AccrualStream.cancelFor(deadline, signature)`; resolves with the tx hash at broadcast. */
   cancelFor(chainId: number, stream: Address, deadline: bigint, signature: Hex): Promise<Hex>;
+  /** Submits `AccrualStream.pauseFor(deadline, signature)` (FR-CON-018); no money moves. */
+  pauseFor(chainId: number, stream: Address, deadline: bigint, signature: Hex): Promise<Hex>;
+  /** Submits `AccrualStream.resumeFor(deadline, signature)` (FR-CON-018). */
+  resumeFor(chainId: number, stream: Address, deadline: bigint, signature: Hex): Promise<Hex>;
 }
 
 export interface StreamState {
@@ -140,9 +144,9 @@ export function viemChainClient(env: { privateKey: Hex; rpcUrl: string; chainId:
         args: [a.merchant, a.subscriber, a.token, a.ratePerSecond, a.maxEscrow, a.deadline, a.v, a.r, a.s],
       });
     },
-    async readCancelNonce(chainId, stream) {
+    async readRelayNonce(chainId, stream) {
       assertChain(chainId);
-      return publicClient.readContract({ address: stream, abi: streamAbi, functionName: "cancelNonce" });
+      return publicClient.readContract({ address: stream, abi: streamAbi, functionName: "relayNonce" });
     },
     async estimateSettle(chainId, stream) {
       assertChain(chainId);
@@ -197,6 +201,14 @@ export function viemChainClient(env: { privateKey: Hex; rpcUrl: string; chainId:
     async cancelFor(chainId, stream, deadline, signature) {
       assertChain(chainId);
       return wallet.writeContract({ account, chain, address: stream, abi: streamAbi, functionName: "cancelFor", args: [deadline, signature] });
+    },
+    async pauseFor(chainId, stream, deadline, signature) {
+      assertChain(chainId);
+      return wallet.writeContract({ account, chain, address: stream, abi: streamAbi, functionName: "pauseFor", args: [deadline, signature] });
+    },
+    async resumeFor(chainId, stream, deadline, signature) {
+      assertChain(chainId);
+      return wallet.writeContract({ account, chain, address: stream, abi: streamAbi, functionName: "resumeFor", args: [deadline, signature] });
     },
   };
 }

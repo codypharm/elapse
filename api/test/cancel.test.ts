@@ -58,7 +58,7 @@ describe("FR-CON-017 cancel authorisation digest", () => {
 describe("FR-API-032 subscriber cancel through the session", () => {
   it("FR_CHK_008_cancel_prepare_returns_the_message_then_cancel_submits_cancelFor", async () => {
     const { sessionId, subId } = await liveSession();
-    chain.setCancelNonce(STREAM, 0n);
+    chain.setRelayNonce(STREAM, 0n);
     const prep = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {}, headers: await identity() });
     expect(prep.status).toBe(200);
     expect(prep.body).toMatchObject({ subscription: subId, stream_address: STREAM, chain_id: 10143, nonce: "0" });
@@ -88,7 +88,7 @@ describe("FR-API-032 subscriber cancel through the session", () => {
 
   it("FR_API_120_cancel_prepare_with_another_subscribers_token_is_403_and_without_one_401", async () => {
     const { sessionId } = await liveSession();
-    chain.setCancelNonce(STREAM, 0n);
+    chain.setRelayNonce(STREAM, 0n);
     const other = privateKeyToAccount(generatePrivateKey());
     const r = await api("POST", `/v1/checkout/sessions/${sessionId}/cancel/prepare`, { key: m.pkTest, body: {}, headers: await identity(other.address) });
     expect(r.status).toBe(403);

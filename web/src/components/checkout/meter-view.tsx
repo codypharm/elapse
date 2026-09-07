@@ -1,7 +1,7 @@
 /**
  * `MeterView` — the running meter on a phone: the readout, what it costs,
  * how much of the chosen cap is left, a way back to the merchant, and
- * Cancel. Pause appears only when the product allows it. Low balance is an
+ * Stop. Pause appears only when the product allows it (FR-CHK-030). Low balance is an
  * amber notice inside the same panel, not a new screen, so the counter
  * never disappears.
  *
@@ -156,15 +156,21 @@ export function MeterView({
             disabled={busy}
             className="h-12 flex-1 text-base"
           >
-            {busy ? "Stopping…" : "Cancel"}
+            {busy ? (paused ? "One moment…" : "Stopping…") : "Stop"}
           </Button>
         </div>
         <p className="text-center text-xs text-ink-soft">
-          Your meter keeps running. Stop it here or from{" "}
-          <a href="/account" className="!text-ink-soft underline underline-offset-3 hover:!text-foreground">
-            your meters
-          </a>{" "}
-          at any time. You only pay for the seconds that elapsed.
+          {paused ? (
+            <>Nothing is charged while paused. Resume when you&rsquo;re ready, or stop to get the rest back.</>
+          ) : (
+            <>
+              Your meter keeps running. Stop it here or from{" "}
+              <a href="/account" className="!text-ink-soft underline underline-offset-3 hover:!text-foreground">
+                your meters
+              </a>{" "}
+              at any time. You only pay for the seconds that elapsed.
+            </>
+          )}
         </p>
       </div>
     </section>

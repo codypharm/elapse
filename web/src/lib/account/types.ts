@@ -25,6 +25,8 @@ export type AccountMeter = {
   merchant: AccountMerchant;
   product: { name: string; rateUsdPerSecond: string };
   status: Extract<SubscriptionStatus, "active" | "paused">;
+  /** The product allows the subscriber to pause (FR-CHK-030); absent means no Pause button. */
+  allowPause?: boolean;
   startedAt: number;
   pausedAt: number | null;
   /** The cap the subscriber authorised, in seconds (FR-CHK-003). */

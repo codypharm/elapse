@@ -72,6 +72,16 @@ Six-week plan in the detailed doc §12. The gates that matter:
 | Webhook signature reference implementation | `sdk/ts/src/index.ts` |
 | Meter math (the only money math in the UI) | `web/src/lib/meter/math.ts` |
 
+## Redeploying the contracts (testnet)
+
+Every change to `contracts/src` means a fresh factory: clones read the implementation the factory was born with. Running meters on the old factory are orphaned, so stop them first (`select count(*) from subscriptions where status in ('active','paused')` should be 0).
+
+1. `cd contracts && ./deploy-testnet.sh <treasury> <relayer>` from the `elapse-dev` keystore. The relayer becomes the keeper in the same run; `deployments/10143.json` is rewritten with the receipt block.
+2. `cd api && pnpm sync-deployments` and `cd indexer && pnpm sync-abi` copy the record (and the ABIs) into the packages that build alone.
+3. In `indexer/config.yaml` set `start_block` to the new `deployedAtBlock` and the factory `address` to the new one.
+4. Restart the API, the worker and `pnpm envio dev -r` (the `-r` resets the local index to the new start block). `GET /v1/status` must show the new factory and zero indexer lag.
+5. Update the address tables in `contracts/README.md` and `docs-site/site/snippets/contracts.mdx`, and add a row to the contracts FRD's Revision table.
+
 ## Before a demo
 
 - The relayer wallet pays every start, cancel and settlement on testnet, in both modes. Check its MON balance first; a dry relayer answers "We can't start meters right now" on Start. Top up at https://faucet.monad.xyz.

@@ -73,7 +73,7 @@ export function CapStep({
       <div>
         <p className="placard">How long may the meter run?</p>
         <p className="mt-1 text-sm text-ink-soft">
-          You only pay the seconds you use. Anything unused comes back when you cancel.
+          You only pay the seconds you use. Anything unused comes back when you stop.
         </p>
       </div>
 

@@ -151,7 +151,6 @@ class StaleIdentity extends CheckoutApiError {
   }
 }
 
-const NOT_AVAILABLE = (what: string) => new CheckoutApiError("invalid_state", `${what} is not available yet.`);
 
 export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
   const sleep = o.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
@@ -176,6 +175,7 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       if (res.status === 401 && serverCode === "subscriber_auth_invalid") throw new StaleIdentity();
       if (res.status === 403 && serverCode === "subscriber_mismatch") throw new CheckoutApiError("sign_in_required", "Sign in again.");
       if (res.status === 429 && serverCode === "receipt_already_sent") throw new CheckoutApiError("already_sent", "Already sent. Check your inbox.");
+      if (res.status === 429) throw new CheckoutApiError("rate_limited", json?.error?.message ?? "Too many changes. Try again in a bit.");
       const code = res.status === 404 ? "not_found" : res.status === 400 && serverCode === "invalid_cap" ? "invalid_amount" : res.status >= 500 ? "network" : "invalid_state";
       throw new CheckoutApiError(code, json?.error?.message ?? "Something went wrong.");
     }
@@ -210,6 +210,14 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
   };
 
   /** Poll until `done(sub)`; returns the last wire session. */
+  /** Prepare → sign (EIP-191 over the 32 bytes) → submit, for cancel, pause and resume (FR-CON-017/018). */
+  async function relay(id: string, action: "cancel" | "pause" | "resume"): Promise<void> {
+    const w = wallet();
+    const auth = await bindingCall<{ message: `0x${string}`; deadline: string }>(`/v1/checkout/sessions/${id}/${action}/prepare`, {});
+    const signature = await w.signMessage(auth.message);
+    await call("POST", `/v1/checkout/sessions/${id}/${action}`, { signature, deadline: auth.deadline });
+  }
+
   async function waitFor(id: string, done: (w: WireSession) => boolean): Promise<WireSession> {
     const deadline = Date.now() + timeout;
     let w = await getWire(id);
@@ -250,18 +258,18 @@ export function createRealCheckoutApi(o: RealApiOptions): CheckoutApi {
       return mapSession(await waitFor(id, (s) => s.subscription?.status === "active" || s.subscription?.status === "canceled"), local);
     },
 
-    async pause() {
-      throw NOT_AVAILABLE("Pause");
+    // FR-CHK-030: pause and resume are relayed like cancel (contracts FR-CON-018); no money moves.
+    async pause(id) {
+      await relay(id, "pause");
+      return mapSession(await waitFor(id, (s) => s.subscription?.status === "paused" || s.subscription?.status === "canceled"), local);
     },
-    async resume() {
-      throw NOT_AVAILABLE("Resume");
+    async resume(id) {
+      await relay(id, "resume");
+      return mapSession(await waitFor(id, (s) => s.subscription?.status === "active" || s.subscription?.status === "canceled"), local);
     },
 
     async cancel(id) {
-      const w = wallet();
-      const auth = await bindingCall<{ message: `0x${string}`; deadline: string }>(`/v1/checkout/sessions/${id}/cancel/prepare`, {});
-      const signature = await w.signMessage(auth.message);
-      await call("POST", `/v1/checkout/sessions/${id}/cancel`, { signature, deadline: auth.deadline });
+      await relay(id, "cancel");
       const done = await waitFor(id, (s) => s.subscription?.status === "canceled");
       return { session: mapSession(done, local), receipt: receiptFrom(done.subscription!) };
     },

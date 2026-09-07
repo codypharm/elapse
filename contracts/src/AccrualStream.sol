@@ -74,8 +74,9 @@ contract AccrualStream is ReentrancyGuard {
     uint256 public settledAmount;
     /// The fee part of `settledAmount`.
     uint256 public settledFee;
-    /// Replay protection for `cancelFor` (FR-CON-017).
-    uint256 public cancelNonce;
+    /// Replay protection shared by every relayed action: `cancelFor`, `pauseFor`,
+    /// `resumeFor` (FR-CON-017, FR-CON-018). The digest tag tells them apart.
+    uint256 public relayNonce;
 
     // ─── Events (the contract's API to the platform, BR-CON-008) ────────────
 
@@ -207,6 +208,38 @@ contract AccrualStream is ReentrancyGuard {
     /// @notice Manual pause (reason 0). Paused time is never billed (FR-CON-022, BR-CON-003).
     ///         A pause that observes exhaustion ends the stream instead (FR-CON-041).
     function pause() external nonReentrant onlyParty {
+        _pause();
+    }
+
+    /// @notice Pause on behalf of a party who signed for it; the relayer submits and
+    ///         pays gas (FR-CON-018). No money moves. The keeper gets no such power.
+    function pauseFor(uint256 deadline, bytes calldata signature) external nonReentrant {
+        _consumeRelay(pauseDigest(relayNonce, deadline), deadline, signature);
+        _pause();
+    }
+
+    /// @notice Resume a manually paused meter (FR-CON-023).
+    function resume() external onlyParty {
+        _resume();
+    }
+
+    /// @notice Resume on behalf of a party who signed for it (FR-CON-018).
+    function resumeFor(uint256 deadline, bytes calldata signature) external nonReentrant {
+        _consumeRelay(resumeDigest(relayNonce, deadline), deadline, signature);
+        _resume();
+    }
+
+    /// @notice The message a party signs for `pauseFor` (EIP-191 personal sign).
+    function pauseDigest(uint256 nonce, uint256 deadline) public view returns (bytes32) {
+        return _relayDigest("ElapsePause", nonce, deadline);
+    }
+
+    /// @notice The message a party signs for `resumeFor` (EIP-191 personal sign).
+    function resumeDigest(uint256 nonce, uint256 deadline) public view returns (bytes32) {
+        return _relayDigest("ElapseResume", nonce, deadline);
+    }
+
+    function _pause() internal {
         if (status != Status.Active) revert InvalidState();
         if (_exhausted()) {
             _endAtCap();
@@ -218,14 +251,21 @@ contract AccrualStream is ReentrancyGuard {
         emit StreamPaused(block.timestamp, 0);
     }
 
-    /// @notice Resume a manually paused meter (FR-CON-023).
-    function resume() external onlyParty {
+    function _resume() internal {
         if (status != Status.Paused) revert InvalidState();
         if (maxSeconds() <= closedActiveSeconds) revert InsufficientDeposit();
         status = Status.Active;
         segmentStart = block.timestamp;
         pausedAt = 0;
         emit StreamResumed(block.timestamp);
+    }
+
+    /// Checks a relayed authorisation (deadline, party signature) and burns the nonce.
+    function _consumeRelay(bytes32 digest, uint256 deadline, bytes calldata signature) internal {
+        if (block.timestamp > deadline) revert BadSignature();
+        address signer = _recover(digest, signature);
+        if (signer != subscriber && signer != merchant) revert BadSignature();
+        relayNonce += 1;
     }
 
     /// @notice Stop the meter: settle unsettled whole seconds, refund the rest
@@ -238,17 +278,17 @@ contract AccrualStream is ReentrancyGuard {
     /// @notice Cancel on behalf of a party who signed for it, so the relayer can
     ///         submit and pay gas (FR-CON-017). Message: keccak256(stream, nonce, deadline).
     function cancelFor(uint256 deadline, bytes calldata signature) external nonReentrant notCanceled {
-        if (block.timestamp > deadline) revert BadSignature();
-        bytes32 digest = cancelDigest(cancelNonce, deadline);
-        address signer = _recover(digest, signature);
-        if (signer != subscriber && signer != merchant) revert BadSignature();
-        cancelNonce += 1;
+        _consumeRelay(cancelDigest(relayNonce, deadline), deadline, signature);
         _cancel();
     }
 
     /// @notice The message a party signs for `cancelFor` (EIP-191 personal sign).
     function cancelDigest(uint256 nonce, uint256 deadline) public view returns (bytes32) {
-        bytes32 inner = keccak256(abi.encode("ElapseCancel", block.chainid, address(this), nonce, deadline));
+        return _relayDigest("ElapseCancel", nonce, deadline);
+    }
+
+    function _relayDigest(string memory tag, uint256 nonce, uint256 deadline) internal view returns (bytes32) {
+        bytes32 inner = keccak256(abi.encode(tag, block.chainid, address(this), nonce, deadline));
         return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", inner));
     }
 

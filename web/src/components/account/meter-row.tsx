@@ -1,16 +1,18 @@
 /**
  * `MeterRow` — one running meter in the account list: who is charging,
  * for what, the live figure, how much of the cap is left, and one way to
- * stop. Deliberately compact: a subscriber may have several running, and
+ * stop; Pause or Resume beside it when the product allows pause
+ * (FR-CHK-030). Deliberately compact: a subscriber may have several running, and
  * three tall cards would push the newest one off a phone screen.
  *
  * The card is the same at every width; a wide screen shows more of them
  * side by side (FR-CHK-024) rather than stretching these.
  *
- * Maps to: FR-CHK-018, FR-CHK-021, FR-CHK-006, FR-CHK-024; BR-CHK-001.
+ * Maps to: FR-CHK-018, FR-CHK-021, FR-CHK-006, FR-CHK-024, FR-CHK-030; BR-CHK-001.
  */
 "use client";
 
+import { Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Readout } from "@/components/meter/readout";
 import {
@@ -32,12 +34,21 @@ export function TestTag() {
 export function MeterRow({
   meter: m,
   busy,
+  pending,
   onStop,
+  onPause,
+  onResume,
 }: {
   meter: AccountMeter;
   busy?: boolean;
+  /** A pause or resume in flight on this row: the button reads "Pausing…" / "Resuming…" (FR-CHK-018). */
+  pending?: "pause" | "resume" | null;
   onStop: () => void;
+  /** Present only when the product allows pause. */
+  onPause?: () => void;
+  onResume?: () => void;
 }) {
+  const paused = m.status === "paused";
   const meter = useMeter({
     rate: m.product.rateUsdPerSecond,
     startedAt: m.startedAt,
@@ -72,7 +83,7 @@ export function MeterRow({
             className="mt-1.5"
           />
           <p className="numerals mt-1 truncate text-xs text-ink-soft">
-            of {formatUsd(cap)} · {formatRuntimeShort(remaining)} left
+            {paused ? `Paused · ${formatRuntimeShort(remaining)} left` : `of ${formatUsd(cap)} · ${formatRuntimeShort(remaining)} left`}
           </p>
         </div>
 
@@ -86,6 +97,19 @@ export function MeterRow({
           Stop
         </Button>
       </div>
+
+      {m.allowPause && (paused ? onResume : onPause) && (
+        <button
+          type="button"
+          onClick={paused ? onResume : onPause}
+          disabled={busy}
+          aria-label={`${paused ? "Resume" : "Pause"} this meter at ${m.merchant.name}`}
+          className="flex min-h-11 items-center justify-center gap-2 border-t border-border text-sm transition-colors outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60"
+        >
+          {paused ? <Play className="size-4" aria-hidden /> : <Pause className="size-4" aria-hidden />}
+          {pending === "pause" ? "Pausing…" : pending === "resume" ? "Resuming…" : paused ? "Resume" : "Pause"}
+        </button>
+      )}
 
       {low && (
         <p role="status" className="mt-auto border-t border-live/30 bg-live-soft px-4 py-2 text-xs">

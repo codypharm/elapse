@@ -33,9 +33,10 @@ The page is built for a phone and says nothing about chains. In order:
 
 1. **Your product and its rate.** Your name and logo from the dashboard, the product, `$0.004 / second` and what that is per hour.
 2. **Sign in.** Face ID or a passkey. No password, no seed phrase, no app to install.
-3. **Funds.** The amount that covers the cap, in dollars. Unused funds return the moment they cancel.
+3. **Funds.** The amount that covers the cap, in dollars. Unused funds return the moment they stop.
 4. **Start.** A live meter: seconds elapsed and dollars accrued, ticking, no jitter.
-5. **Cancel.** A receipt: "You paid for 83 seconds · $0.33". Then the redirect to your `success_url`.
+5. **Pause**, if the Product has `allow_pause`. Nothing is charged while paused; the meter keeps its subscription id, its cap and its funds, and Resume picks up where it left off. You receive `subscription.updated` for each change.
+6. **Stop.** A receipt: "You paid for 83 seconds · $0.33". Then the redirect to your `success_url`.
 
 If they leave before pressing Start, or the session's hour passes, they land on `cancel_url` and nothing was charged.
 
