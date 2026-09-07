@@ -147,6 +147,7 @@ describe("FR-CLI-010..017 elapse listen --forward", () => {
     const ac = new AbortController();
     const done = listen(base({ signal: ac.signal }));
     await until(() => out.some((l) => l.startsWith("Ready.")));
+    await until(() => platform.connected); // "Ready." prints before the stream request lands; drop nothing until it has
     platform.drop();
     await until(() => err.some((l) => /Connection lost. Reconnecting in 1 s \(attempt 1\)/.test(l)));
     await until(() => platform.requests.filter((r) => r.path.endsWith("/stream")).length === 2);

@@ -7,6 +7,8 @@ export interface MockPlatform {
   requests: { method: string; path: string; body: any; headers: IncomingMessage["headers"] }[];
   /** Push a delivery frame to the open stream. */
   emit(frame: { id: string; event_id: string; type: string; raw_body: string; manual?: true }): void;
+  /** True while a CLI stream is open; tests wait on it before dropping (a cold runner opens it after "Ready."). */
+  readonly connected: boolean;
   /** Sever the open stream. */
   drop(): void;
   livemode: boolean;
@@ -19,7 +21,7 @@ export async function startMockPlatform(o: { livemode?: boolean; secret?: string
   // keeps queued Deliveries until a stream connects (a cold Node 20 runner opens it late).
   const pending: string[] = [];
   const secret = o.secret ?? "whsec_mock000000000000000000000000000";
-  const m: MockPlatform = { url: "", acks: [], requests: [], livemode: o.livemode ?? false, emit, drop, close };
+  const m: MockPlatform = { url: "", acks: [], requests: [], livemode: o.livemode ?? false, emit, drop, close, get connected() { return stream !== null; } };
   function emit(frame: { id: string; event_id: string; type: string; raw_body: string; manual?: true }) {
     const t = Math.floor(Date.now() / 1000);
     const data = { ...frame, created: t, headers: { "Content-Type": "application/json", "X-Elapse-Signature": `t=${t},v1=${"ab".repeat(32)}`, "X-Elapse-Delivery": frame.id } };

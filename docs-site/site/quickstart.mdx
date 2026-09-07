@@ -18,6 +18,8 @@ Every snippet on this page is extracted from the finished merchant in [`examples
   <Step title="Get a test secret key">
     Open the dashboard, go to **Developers → API keys**, and create a key. It is shown once. Keep it on the server; the SDK refuses to construct in a browser.
 
+    Then set a payout address under **Settings**. Checkout links cannot be created until Elapse knows where to send your settlements, and live keys are issued only after it is set.
+
     ```bash
     export ELAPSE_SECRET_KEY=sk_test_…
     export ELAPSE_API_URL=https://…        # see Authentication

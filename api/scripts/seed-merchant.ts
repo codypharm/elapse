@@ -5,7 +5,7 @@
  */
 import { createApiKey, listApiKeys } from "../src/db/api-keys";
 import { sql } from "../src/db/client";
-import { createMerchant, findMerchantByEmail } from "../src/db/merchants";
+import { createMerchant, findMerchantByEmail, getPayoutAddress, setPayoutAddress } from "../src/db/merchants";
 
 if (process.env.NODE_ENV === "production") {
   console.error("seed-merchant refuses to run in production.");
@@ -19,7 +19,10 @@ if (!merchant) {
 }
 const { plaintext } = await createApiKey({ merchantId: merchant.id, kind: "sk", livemode: false, name: `seed ${new Date().toISOString().slice(0, 10)}`, actor: "system:seed" });
 const pk = (await listApiKeys(merchant.id, false)).find((k) => k.kind === "pk")!.plaintext;
+// A throwaway payout address so the seeded merchant can create checkout links (FR-API-035); real merchants set theirs in Settings.
+if (!(await getPayoutAddress(merchant.id))) await setPayoutAddress(merchant.id, "0x1111111111111111111111111111111111111111");
 console.log(`merchant   ${merchant.id}  (${email})`);
+console.log(`payout     0x1111…1111  (test placeholder; change it in Settings)`);
 console.log(`pk_test    ${pk}`);
 console.log(`sk_test    ${plaintext}   ← shown once; put it in ELAPSE_SECRET_KEY`);
 await sql.close();
