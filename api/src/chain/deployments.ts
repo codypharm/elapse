@@ -27,3 +27,22 @@ export function escrowTokenFor(chainId: number): Address {
   const d = deploymentFor(chainId);
   return chainId === 143 ? d.ausd : d.mockUsd;
 }
+
+/** Whether the relayer may mint the escrow token to a short wallet: true only for MockUSD (FR-API-032/034). Keyed by token, not mode: live mode runs on 10143 until a mainnet record exists (ADR 2026-09-07 testnet submission). */
+export function isMintable(chainId: number, token: Address): boolean {
+  return token.toLowerCase() === deploymentFor(chainId).mockUsd.toLowerCase();
+}
+
+/**
+ * Add or replace a chain's record at runtime; returns a function that restores the previous
+ * state. Test seam for chains without a committed record (a mainnet record is a JSON file,
+ * never registered here in production).
+ */
+export function registerDeployment(d: Deployment): () => void {
+  const previous = byChain[d.chainId];
+  byChain[d.chainId] = d;
+  return () => {
+    if (previous) byChain[d.chainId] = previous;
+    else delete byChain[d.chainId];
+  };
+}

@@ -100,8 +100,8 @@ Spec: [`docs/specs/worker-frd.md`](../docs/specs/worker-frd.md) (signed 2026-09-
 
 ## Modes and chains
 
-Test keys drive real streams on Monad testnet (10143) with `MockUSD`; live keys use mainnet (143) with AUSD. In test checkout the relayer mints `MockUSD` to the subscriber so nobody hunts for a faucet (FR-API-032). The relayer's own testnet MON comes from <https://faucet.monad.xyz> (about 5 MON per 12 h, roughly 100 checkouts a day): a platform chore, not a user's.
+Test keys drive real streams on Monad testnet (10143) with `MockUSD`. Live keys do too until a mainnet record exists (`LIVE_CHAIN_ID`, default 10143; [ADR 2026-09-07](../docs/decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md)); they move to mainnet (143) with AUSD when `contracts/deployments/143.json` lands. Whenever the escrow token is `MockUSD` the relayer mints it to the subscriber so nobody hunts for a faucet (FR-API-032); on AUSD a short wallet is refused before any gas is spent (FR-API-034). The relayer's own testnet MON comes from <https://faucet.monad.xyz> (about 5 MON per 12 h, roughly 100 checkouts a day): a platform chore, not a user's.
 
 ## Hosting (Undecided 11, decided)
 
-API and worker run on Railway as two processes from this repo; Postgres is Neon. `RELAYER_PRIVATE_KEY` lives only in the API process's Railway environment, holds MON for gas and never AUSD. Before mainnet it moves to a KMS-backed signer and the factory owner/treasury become a Safe multisig (Undecided 12).
+API and worker run on Railway as two processes from this repo; Postgres is Neon. `RELAYER_PRIVATE_KEY` lives only in the API process's Railway environment, holds MON for gas and never AUSD. The relayer is its own wallet, set as the factory's `keeper`; the factory owner and fee treasury are a separate wallet William holds. A hardware wallet or multisig for the owner is post-submission (Undecided 12, [ADR 2026-09-07](../docs/decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md)).

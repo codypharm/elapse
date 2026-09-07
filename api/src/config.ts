@@ -1,7 +1,8 @@
 /**
  * Process configuration, read once. Everything here is non-secret or a
  * reference to a secret held in the environment; nothing is logged.
- * Test mode = Monad testnet 10143 with MockUSD, live = 143 with AUSD (Undecided 4).
+ * Test mode = Monad testnet 10143 with MockUSD. Live mode is 10143 too until a mainnet record exists
+ * (ADR 2026-09-07 testnet submission); it becomes 143 with AUSD when `deployments/143.json` lands.
  */
 export const config = {
   port: Number(process.env.PORT ?? 4000),
@@ -9,7 +10,7 @@ export const config = {
   tokenDecimals: Number(process.env.TOKEN_DECIMALS ?? 6),
   chains: {
     test: 10143,
-    live: 143,
+    live: Number(process.env.LIVE_CHAIN_ID ?? 10143),
   },
   checkoutBaseUrl: process.env.NEXT_PUBLIC_CHECKOUT_URL ?? "http://localhost:3000",
   /** Where the dashboard is served; magic links point here and it is the only Origin allowed to mutate with a cookie (FR-API-101). */

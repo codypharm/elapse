@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "bun:test";
+import { chainIdFor } from "../src/config";
 import { sql } from "../src/db/client";
 import { api, resetDb, seedMerchant, type Fixture } from "./helpers";
 import { insertProduct } from "../src/db/products";
@@ -29,7 +30,7 @@ async function seedIncomplete(opts: { streamAddress?: string | null; pendingTx?:
   const maxDuration = opts.maxDuration ?? 3600;
   const sub = await insertSubscription({
     merchantId: m.merchantId, livemode, productId, customerId, checkoutSessionId: sessionId,
-    chainId: livemode ? 143 : CHAIN, ratePerSecondWei: 4000n, maxDurationSeconds: maxDuration, maxEscrowWei: 4000n * BigInt(maxDuration),
+    chainId: livemode ? chainIdFor(true) : CHAIN, ratePerSecondWei: 4000n, maxDurationSeconds: maxDuration, maxEscrowWei: 4000n * BigInt(maxDuration),
     streamAddress: opts.streamAddress === undefined ? STREAM : opts.streamAddress, pendingTx: opts.pendingTx ?? null,
   });
   subId = sub.id;
@@ -76,17 +77,15 @@ describe("FR-API-070 auth and idempotency", () => {
     expect(count).toBe(1);
   });
 
-  it("FR_API_072_a_testnet_log_for_a_live_subscription_is_409", async () => {
+  it("FR_API_072_a_live_subscription_on_testnet_takes_testnet_logs_and_a_log_from_another_chain_is_unknown", async () => {
+    // Live mode runs on 10143 until a mainnet record exists (ADR 2026-09-07 testnet submission).
     await seedIncomplete({ livemode: true });
-    // Same address on chain 10143 while the subscription lives on 143.
-    const r = await ingest(log("StreamStarted", { merchant: MERCHANT_ADDR, subscriber: SUBSCRIBER, ratePerSecond: "4000", startedAt: String(T0) }, { chainId: 10143 }));
-    // Address lookup is per chain, so this is simply unknown on 10143…
-    expect(r.body.ignored).toBe(true);
-    // …but a body whose chain is 143 with the live subscription and a testnet-flagged event is refused.
-    const bad = await ingest(log("StreamStarted", { merchant: MERCHANT_ADDR, subscriber: SUBSCRIBER, ratePerSecond: "4000", startedAt: String(T0) }, { chainId: 143 }));
-    expect(bad.status).toBe(200); // live chain, live subscription: fine
-    const sub = await findSubscription(m.merchantId, true, subId);
-    expect(sub!.status).toBe("active");
+    const r = await ingest(log("StreamStarted", { merchant: MERCHANT_ADDR, subscriber: SUBSCRIBER, ratePerSecond: "4000", startedAt: String(T0) }, { chainId: chainIdFor(true) }));
+    expect(r.status).toBe(200);
+    expect((await findSubscription(m.merchantId, true, subId))!.status).toBe("active");
+    // Address lookup is per chain, so the same address on a chain the subscription is not on is simply unknown.
+    const other = await ingest(log("StreamStarted", { merchant: MERCHANT_ADDR, subscriber: SUBSCRIBER, ratePerSecond: "4000", startedAt: String(T0) }, { chainId: 143 }));
+    expect(other.body.ignored).toBe(true);
   });
 });
 

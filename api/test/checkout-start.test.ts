@@ -9,7 +9,7 @@ import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
 import { prepareSession, startSession, CheckoutStateError } from "../src/services/checkout";
 import { config } from "../src/config";
-import { deploymentFor } from "../src/chain/deployments";
+import { deploymentFor, registerDeployment } from "../src/chain/deployments";
 
 let m: Fixture;
 let chain: ReturnType<typeof fakeChain>;
@@ -108,11 +108,21 @@ describe("FR-API-032 start", () => {
     expect(chain.mints).toEqual([]);
   });
 
-  it("FR_API_034_a_live_start_the_wallet_cannot_fund_is_refused_before_any_transaction", async () => {
-    // No mainnet record exists yet, so live mode resolves the testnet deployment for this test only.
+  it("FR_API_032_a_live_start_on_testnet_mints_MockUSD_like_test_mode", async () => {
+    // Until a mainnet record exists, live mode runs on 10143 with MockUSD (ADR 2026-09-07 testnet submission).
+    const { session, signature } = await prepared(3600, true);
+    await startSession({ session, signature, now: NOW });
+    expect(chain.mints).toEqual([{ to: subscriber.address.toLowerCase(), amount: 14_400_000n }]);
+    expect(chain.creates).toHaveLength(1);
+    expect(chain.creates[0]).toMatchObject({ chainId: 10143, token: deploymentFor(10143).mockUsd });
+  });
+
+  it("FR_API_034_a_start_on_an_AUSD_chain_the_wallet_cannot_fund_is_refused_before_any_transaction", async () => {
+    // No mainnet record exists yet: register one for this test that mirrors testnet, so live resolves to chain 143 and AUSD.
     const chains = config.chains as { live: number };
     const live = chains.live;
-    chains.live = 10143;
+    chains.live = 143;
+    const restore = registerDeployment({ ...deploymentFor(10143), chainId: 143 });
     try {
       chain.balances.set(subscriber.address.toLowerCase(), 3_100_000n);
       const { session, signature } = await prepared(3600, true);
@@ -122,14 +132,16 @@ describe("FR-API-032 start", () => {
       expect((err as Error).message).toBe("This meter needs $14.40 to start. Your balance is $3.10.");
       expect(chain.mints).toEqual([]);
       expect(chain.creates).toEqual([]);
-      // exactly enough starts
+      // exactly enough starts, without a mint
       chain.balances.set(subscriber.address.toLowerCase(), 14_400_000n);
       const again = await prepared(3600, true);
       await startSession({ session: again.session, signature: again.signature, now: NOW });
       expect(chain.creates).toHaveLength(1);
+      expect(chain.creates[0]).toMatchObject({ chainId: 143, token: deploymentFor(143).ausd });
       expect(chain.mints).toEqual([]);
     } finally {
       chains.live = live;
+      restore();
     }
   });
 

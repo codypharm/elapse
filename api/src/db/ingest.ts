@@ -56,7 +56,8 @@ export async function ingestChainEvent(body: IngestBody): Promise<IngestResult> 
     const streamAddress = body.event_name === "StreamCreated" ? (body.args.stream ?? "").toLowerCase() : address;
     const sub = streamAddress ? await findSubscriptionForLog(body.chain_id, streamAddress, txHash, tx) : null;
     if (!sub) return { duplicate: false, ignored: true };
-    if (sub.livemode !== (body.chain_id === 143)) throw new ModeMismatch(sub.id);
+    // The lookup is per chain, so this is belt and braces: a Subscription only takes logs from its own chain (FR-API-072).
+    if (sub.chain_id !== body.chain_id) throw new ModeMismatch(sub.id);
 
     await tx`UPDATE chain_events SET subscription_id = ${sub.id} WHERE id = ${chainEventId}`;
     const events = await applyLog(tx, sub, body, chainEventId);

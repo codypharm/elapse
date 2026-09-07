@@ -15,7 +15,7 @@ import { getPayoutAddress } from "../db/merchants";
 import { findProduct } from "../db/products";
 import { findSubscription, insertSubscription, type SubscriptionRow } from "../db/subscriptions";
 import { chainClient } from "../chain/relayer";
-import { deploymentFor, escrowTokenFor } from "../chain/deployments";
+import { deploymentFor, escrowTokenFor, isMintable } from "../chain/deployments";
 import { buildPermitTypedData, recoverPermitSigner, splitSignature, PERMIT_TYPES, type PermitDomain } from "../chain/permit";
 import { cancelInnerHash, recoverCancelSigner } from "../chain/cancel-auth";
 import { baseUnitsToDecimal } from "../lib/money";
@@ -161,11 +161,11 @@ export async function startSession(input: { session: CheckoutSessionRow; signatu
   const signer = await recoverPermitSigner(td, input.signature);
   if (signer !== wallet.toLowerCase()) throw new CheckoutStateError("bad_signature", "The signature does not match the subscriber's wallet.");
 
-  // Test mode: the relayer tops the wallet up with MockUSD so no one hunts for a faucet (Undecided 4).
-  // Live mode (FR-API-034): a wallet that cannot fund the cap is refused here, before any gas is spent.
+  // MockUSD (both modes until mainnet): the relayer tops the wallet up so no one hunts for a faucet (Undecided 4).
+  // AUSD (FR-API-034): a wallet that cannot fund the cap is refused here, before any gas is spent.
   const balance = await chain.readBalance(chainId, token, wallet);
   if (balance < maxEscrow) {
-    if (session.livemode) {
+    if (!isMintable(chainId, token)) {
       throw new CheckoutStateError("insufficient_balance", `This meter needs $${usd(maxEscrow)} to start. Your balance is $${usd(balance)}.`);
     }
     await chain.mintMock(chainId, token, wallet, maxEscrow);
