@@ -34,14 +34,13 @@ async function isPng(file: File): Promise<boolean> {
   const head = new Uint8Array(await file.slice(0, PNG_SIGNATURE.length).arrayBuffer());
   return PNG_SIGNATURE.every((b, i) => head[i] === b);
 }
-const BRANDING_FIELDS = { "branding.display_name": "Keep the name under 80 characters.", "branding.accent": "Use a colour like #1D4ED8.", "branding.support_url": "Enter a link starting with https://." } as const;
+const BRANDING_FIELDS = { "branding.display_name": "Keep the name under 80 characters.", "branding.accent": "Use a colour like #1D4ED8." } as const;
 type BrandingField = keyof typeof BRANDING_FIELDS;
 
 export function BrandingSection() {
   const { api, merchant, setMerchant } = useMerchant();
   const [name, setName] = useState(merchant.branding.name || merchant.name || "");
   const [accent, setAccent] = useState(merchant.branding.accent ?? "");
-  const [supportUrl, setSupportUrl] = useState(merchant.branding.supportUrl ?? merchant.supportUrl ?? "");
   const [logoUrl, setLogoUrl] = useState<string | undefined>(merchant.branding.logoUrl);
   const [logoError, setLogoError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -57,7 +56,6 @@ export function BrandingSection() {
   const problems = {
     "branding.display_name": check({ ...rules.businessName, check: (v) => (v.length > 80 ? "Keep the name under 80 characters." : null) }, name),
     "branding.accent": check(rules.optional(rules.accent), accent),
-    "branding.support_url": check(rules.optional(rules.url), supportUrl),
   };
   const valid = Object.values(problems).every((p) => p === null);
   const shown = (f: BrandingField, value: string) => (serverError?.field === f ? serverError.message : value.trim() ? problems[f] : null);
@@ -101,7 +99,7 @@ export function BrandingSection() {
     try {
       setMerchant(
         await api.updateMerchant(
-          { branding: { name: name.trim() || merchant.name || "", accent: accent.trim() || undefined, supportUrl: supportUrl.trim() || undefined, logoUrl } },
+          { branding: { name: name.trim() || merchant.name || "", accent: accent.trim() || undefined, logoUrl } },
           { idempotencyKey: newIdempotencyKey() },
         ),
       );
@@ -127,7 +125,8 @@ export function BrandingSection() {
     name: name || "Your business",
     logoUrl,
     accent: lowContrast || problems["branding.accent"] ? undefined : accent || undefined,
-    supportUrl: problems["branding.support_url"] ? undefined : supportUrl || undefined,
+    // The Support link comes from the business profile (decided 2026-09-07: one field, not two).
+    supportUrl: merchant.supportUrl || undefined,
   };
 
   return (
@@ -186,11 +185,6 @@ export function BrandingSection() {
               error={shown("branding.accent", accent)}
               hint={lowContrast ? <span className="text-caution">Hard to see against a light or dark page. Pick something with more contrast; the default amber is used until then.</span> : "Click the swatch to pick, or type a hex. The preview follows as you go. Leave empty for the default amber."}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="brand-support">Support URL</Label>
-            <Input id="brand-support" type="url" inputMode="url" autoComplete="url" value={supportUrl} onChange={(e) => setSupportUrl(e.target.value)} maxLength={rules.url.maxLength} aria-invalid={shown("branding.support_url", supportUrl) ? true : undefined} aria-describedby="brand-support-hint" className="numerals h-10 text-[14px]" />
-            <FieldHint id="brand-support-hint" error={shown("branding.support_url", supportUrl)} hint="Where subscribers go for help. Starts with https://." />
           </div>
           <div>
             <Button type="submit" disabled={busy || !valid} className="h-9">

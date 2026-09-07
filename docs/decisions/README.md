@@ -46,3 +46,4 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [`/account` reads real data: both modes with a Test tag, receipts from canceled subscriptions, email receipt built, seeded mock gone from the route](./2026-09-07-account-page-on-real-data.md) | William |
 | 2026-09-07 | [Start again is offered on every receipt and opens a copy of the ended session on the merchant's behalf](./2026-09-07-start-again-after-any-end.md) | William |
 | 2026-09-07 | [Subscriber pause ships as a signed relay in the shape of cancel; "Stop" replaces "Cancel" on the subscriber side](./2026-09-07-subscriber-pause-signed-relay.md) | William |
+| 2026-09-07 | [The support URL is one field, in the business profile; checkout branding no longer repeats it](./2026-09-07-support-url-one-field-in-profile.md) | William |

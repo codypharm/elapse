@@ -71,6 +71,10 @@ describe("real DashboardApi", () => {
     responses = [profile];
     await api().updateMerchant({ supportEmail: " help@acme.test ", supportUrl: "https://acme.test/help " });
     expect(calls[1]!.body).toEqual({ support_email: "help@acme.test", support_url: "https://acme.test/help" });
+    // Saving branding never touches the profile's support URL (one field, in the profile, decided 2026-09-07).
+    responses = [profile];
+    await api().updateMerchant({ branding: { name: "Acme Cloud", accent: "#4f46e5" } });
+    expect(calls[2]!.body).toEqual({ branding: { display_name: "Acme Cloud", accent: "#4f46e5" } });
   });
 
   it("FR_DSH_118_search_text_is_encoded_before_it_enters_a_path", async () => {

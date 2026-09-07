@@ -551,7 +551,8 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
       if (input.name !== undefined && input.name !== null) body.name = input.name.trim();
       if (input.supportEmail !== undefined) body.support_email = blankToNull(input.supportEmail);
       if (input.supportUrl !== undefined) body.support_url = blankToNull(input.supportUrl);
-      if (input.branding) body.branding = { display_name: blankToNull(input.branding.name) ?? null, accent: blankToNull(input.branding.accent) ?? null, support_url: blankToNull(input.branding.supportUrl) ?? null };
+      // The support URL is a profile field; branding never sends it (one field, decided 2026-09-07).
+      if (input.branding) body.branding = { display_name: blankToNull(input.branding.name) ?? null, accent: blankToNull(input.branding.accent) ?? null };
       return mapMerchant(await call<WireProfile>("POST", "/v1/dashboard/me", { body, idempotencyKey: idem(opts) }));
     },
     async uploadLogo(file, opts) {

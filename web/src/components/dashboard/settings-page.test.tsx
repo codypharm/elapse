@@ -162,7 +162,17 @@ describe("SettingsPage", () => {
     await waitFor(() => expect(within(preview).queryByRole("presentation")).toBeNull());
   });
 
-  it("FR_DSH_114_branding_blocks_save_on_a_bad_accent_or_support_url", async () => {
+  it("FR_DSH_103_support_url_lives_in_the_business_profile_only_and_the_branding_preview_reads_it", async () => {
+    const m = await signIn(api);
+    mount(api, m);
+    expect(document.getElementById("brand-support")).toBeNull();
+    expect(screen.getAllByLabelText(/support url/i)).toHaveLength(1);
+    expect(document.getElementById("biz-support-url")).toHaveValue("https://nimbus.example/support");
+    // The 390 px preview still carries the Support link, from the profile value.
+    expect(screen.getByRole("link", { name: /^support$/i })).toHaveAttribute("href", "https://nimbus.example/support");
+  });
+
+  it("FR_DSH_114_branding_blocks_save_on_a_bad_accent", async () => {
     const user = userEvent.setup();
     const m = await signIn(api);
     mount(api, m);
@@ -175,10 +185,6 @@ describe("SettingsPage", () => {
     await user.clear(accent);
     await user.type(accent, "#3b82f6");
     expect(screen.getByRole("button", { name: /save branding/i })).toBeEnabled();
-    const url = document.getElementById("brand-support")!;
-    await user.clear(url);
-    await user.type(url, "nimbus.example/help");
-    expect(screen.getByRole("button", { name: /save branding/i })).toBeDisabled();
   });
 
   it("offers a colour picker on the swatch that stays in sync with the hex field and the preview (FR-DSH-103)", async () => {
