@@ -157,3 +157,17 @@ describe("FR-CHK-027 afterError: what the page does with a failed action", () =>
     expect(afterError("boom")).toEqual({ message: "Something went wrong", openSignIn: false });
   });
 });
+
+describe("FR-CHK-002 actionGate: what the primary action does while the device's sign-in is being restored", () => {
+  it("holds while the provider is restoring, asks for sign-in when a wallet is needed and absent, otherwise proceeds", async () => {
+    const { actionGate } = await import("./view");
+    // provider still restoring: hold, never flicker between states
+    expect(actionGate({ ready: false, walletReady: false, needsWallet: true })).toBe("pending");
+    expect(actionGate({ ready: false, walletReady: false, needsWallet: false })).toBe("pending");
+    // restored without a session on this device, on a step that signs things: sign in first
+    expect(actionGate({ ready: true, walletReady: false, needsWallet: true })).toBe("signin");
+    // restored with the wallet, or on a step that needs none: go
+    expect(actionGate({ ready: true, walletReady: true, needsWallet: true })).toBe("ok");
+    expect(actionGate({ ready: true, walletReady: false, needsWallet: false })).toBe("ok");
+  });
+});

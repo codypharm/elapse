@@ -41,6 +41,12 @@ export interface AuthFlow {
    * reloads). The page signs in silently instead of asking again.
    */
   signedInAlready?: boolean;
+  /**
+   * The provider has finished restoring this device's session (Privy's `ready`, plus the wallet
+   * lookup when there is a session). Until then the page holds its primary action (FR-CHK-002).
+   * Absent means ready.
+   */
+  ready?: boolean;
 }
 
 export const mockAuthFlow: AuthFlow = {

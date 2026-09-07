@@ -62,7 +62,7 @@ describe("FR-EXM-012 GET /access/:sub", () => {
 
 describe("FR-EXM-010/011 pages", () => {
   it("GET / shows Acme GPU, the price, and a Start link to the current session", async () => {
-    const { base } = await start();
+    const { base, entitlements } = await start();
     const html = await (await fetch(base)).text();
     expect(html).toContain("Acme GPU");
     expect(html).toContain("GPU · 4090");
@@ -72,6 +72,10 @@ describe("FR-EXM-010/011 pages", () => {
     expect(await (await fetch(base)).text()).toContain("/c/cs_1");
     await fetch(`${base}/ok?session_id=cs_1`);
     expect(await (await fetch(base)).text()).toContain("/c/cs_2");
+    // Used without ever visiting /ok (the subscriber stayed on the meter): the completed webhook is the signal (FR-EXM-010).
+    entitlements.apply(JSON.parse(canceled().replace("subscription.canceled", "checkout.session.completed").replace('"id":"sub_4QeABC"', '"id":"cs_2","subscription":"sub_4QeABC"')));
+    expect(await (await fetch(base)).text()).toContain("/c/cs_3");
+    expect(await (await fetch(base)).text()).toContain("/c/cs_3");
   });
 
   it("GET /ok shows access granted and the entitlement state; GET /cancel says nothing was charged", async () => {

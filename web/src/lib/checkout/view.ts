@@ -54,3 +54,14 @@ export function afterError(e: unknown): { message: string; openSignIn: boolean }
   const message = e instanceof Error ? e.message : "Something went wrong";
   return { message, openSignIn: e instanceof CheckoutApiError && e.code === "sign_in_required" };
 }
+
+/**
+ * FR-CHK-002: the primary action while the auth provider restores this device's session.
+ * `pending` holds the button (one calm state instead of email → Face ID → Continue flashing);
+ * `signin` means the step needs the wallet and the device has none; `ok` proceeds.
+ */
+export function actionGate(o: { ready: boolean; walletReady: boolean; needsWallet: boolean }): "pending" | "signin" | "ok" {
+  if (!o.ready) return "pending";
+  if (o.needsWallet && !o.walletReady) return "signin";
+  return "ok";
+}

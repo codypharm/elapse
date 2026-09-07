@@ -21,7 +21,7 @@ export interface ServerDeps {
 }
 
 export function createServer(deps: ServerDeps) {
-  const sessions = new SessionCache(deps.createSession);
+  const sessions = new SessionCache(deps.createSession, (id) => deps.entitlements.forSession(id) !== undefined);
   return createHttpServer((req, res) => {
     route(req, res, deps, sessions).catch((err: Error) => {
       deps.log(`✗ ${req.method} ${req.url}: ${err.message}`);
@@ -30,11 +30,20 @@ export function createServer(deps: ServerDeps) {
   });
 }
 
-/** FR-EXM-010: one open session is reused across page loads; a used one is replaced on the next load. */
+/**
+ * FR-EXM-010: one open session is reused across page loads; a used one is replaced on the next
+ * load. "Used" is learned two ways: the subscriber landed on /ok, or the `checkout.session.completed`
+ * webhook arrived for it (they may stay on the meter and never visit /ok). The SDK surface has no
+ * session retrieve, and the webhook is the honest signal anyway.
+ */
 class SessionCache {
   #current: Promise<{ id: string; url: string }> | undefined;
-  constructor(private readonly create: () => Promise<{ id: string; url: string }>) {}
-  current() {
+  constructor(
+    private readonly create: () => Promise<{ id: string; url: string }>,
+    private readonly used: (id: string) => boolean,
+  ) {}
+  async current() {
+    if (this.#current && this.used((await this.#current).id)) this.#current = undefined;
     return (this.#current ??= this.create());
   }
   async consume(id: string) {

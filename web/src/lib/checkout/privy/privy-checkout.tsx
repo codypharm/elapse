@@ -99,7 +99,7 @@ type Pending = { resolve: (r: AuthResult) => void; reject: (e: Error) => void; e
 
 function PrivyAuthFlow({ children }: { children: ReactNode }) {
   const { user, authenticated, ready, getAccessToken } = usePrivy();
-  const { wallets } = useWallets();
+  const { wallets, ready: walletsReady } = useWallets();
 
   // FR-CHK-027: the identity token the SDK already holds, refreshed through Privy only when it is
   // missing or about to expire (see identity.ts for why not `getIdentityToken()` every time).
@@ -198,6 +198,8 @@ function PrivyAuthFlow({ children }: { children: ReactNode }) {
   // wallet over and let the page sign in silently. Also the safety net for the Google return.
   const privyWallet = ready && authenticated ? wallets.find((x) => x.walletClientType === "privy") : undefined;
   const walletReady = privyWallet !== undefined;
+  // Restored: Privy answered, and when it holds a session the wallet list has arrived too (it lags `ready` by a tick).
+  const restored = ready && (!authenticated || walletsReady);
   useEffect(() => {
     if (privyWallet) setSubscriberWallet(subscriberWalletFrom(privyWallet, CHAIN_ID));
   }, [privyWallet]);
@@ -213,6 +215,7 @@ function PrivyAuthFlow({ children }: { children: ReactNode }) {
       },
       resumed,
       signedInAlready: walletReady,
+      ready: restored,
       linkPasskey: () =>
         new Promise<void>((resolve, reject) => {
           link.current = { resolve, reject };
@@ -236,7 +239,7 @@ function PrivyAuthFlow({ children }: { children: ReactNode }) {
           void loginWithCode({ code });
         }),
     }),
-    [authenticated, passkeyFirst, resumed, walletReady, finish, loginWithPasskey, linkWithPasskey, initOAuth, sendCode, loginWithCode],
+    [authenticated, passkeyFirst, resumed, walletReady, restored, finish, loginWithPasskey, linkWithPasskey, initOAuth, sendCode, loginWithCode],
   );
 
   return <AuthFlowProvider value={flow}>{children}</AuthFlowProvider>;

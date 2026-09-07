@@ -27,7 +27,7 @@ import {
   type Receipt as ReceiptData,
 } from "@/lib/checkout/mock-api";
 import type { CheckoutSession, CheckoutView } from "@/lib/checkout/types";
-import { afterError, deriveView } from "@/lib/checkout/view";
+import { actionGate, afterError, deriveView } from "@/lib/checkout/view";
 import { formatUsd, parseRate } from "@/lib/meter/math";
 import { capEndsAt, formatCap, parseUsd } from "@/lib/checkout/funding";
 import { CheckoutFrame } from "./checkout-frame";
@@ -160,6 +160,8 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
 
   const { session } = load;
   const view: CheckoutView = deriveView(session, now);
+  // FR-CHK-002: on the real API the cap and start steps sign with the device's wallet, which Privy restores after load.
+  const gate = actionGate({ ready: flow.ready ?? true, walletReady: real ? (flow.signedInAlready ?? false) || (session.signedIn ?? false) : true, needsWallet: view === "cap" || view === "ready" });
   const successHref = `${session.merchant.successUrl}${session.merchant.successUrl.includes("?") ? "&" : "?"}session_id=${session.id}`;
 
   // A session that has stopped still gets a receipt when opened later,
@@ -203,10 +205,16 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         <div className="flex flex-1 flex-col gap-4">
           <RatePanel product={session.product} />
           <div className="mt-auto flex flex-col gap-2 pt-2">
-            <Button size="lg" onClick={() => setAuthOpen(true)} className="h-12 w-full text-base">
-              {passkeyFirst ? <ScanFace data-icon="inline-start" className="size-5" /> : <Mail data-icon="inline-start" className="size-5" />}
-              {passkeyFirst ? "Continue with Face ID" : "Continue with email"}
-            </Button>
+            {(flow.ready ?? true) ? (
+              <Button size="lg" onClick={() => setAuthOpen(true)} className="h-12 w-full text-base">
+                {passkeyFirst ? <ScanFace data-icon="inline-start" className="size-5" /> : <Mail data-icon="inline-start" className="size-5" />}
+                {passkeyFirst ? "Continue with Face ID" : "Continue with email"}
+              </Button>
+            ) : (
+              <Button size="lg" disabled className="h-12 w-full text-base">
+                Checking your sign-in…
+              </Button>
+            )}
             <a
               href={session.merchant.cancelUrl}
               className="py-2 text-center text-sm !text-ink-soft !no-underline hover:!text-foreground"
@@ -224,7 +232,25 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {view === "cap" && (
+      {(view === "cap" || view === "ready") && gate !== "ok" && (
+        <div className="flex flex-1 flex-col gap-4">
+          <RatePanel product={session.product} />
+          <div className="mt-auto flex flex-col gap-2 pt-2">
+            {gate === "pending" ? (
+              <Button size="lg" disabled className="h-12 w-full text-base">
+                Checking your sign-in…
+              </Button>
+            ) : (
+              <Button size="lg" onClick={() => setAuthOpen(true)} className="h-12 w-full text-base">
+                {passkeyFirst ? <ScanFace data-icon="inline-start" className="size-5" /> : <Mail data-icon="inline-start" className="size-5" />}
+                {passkeyFirst ? "Continue with Face ID" : "Continue with email"}
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {view === "cap" && gate === "ok" && (
         <div className="flex flex-1 flex-col gap-5">
           <RatePanel product={session.product} />
           <CapStep
@@ -235,7 +261,7 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {view === "ready" && session.subscription && (
+      {view === "ready" && gate === "ok" && session.subscription && (
         <div className="flex flex-1 flex-col gap-4">
           <RatePanel product={session.product} />
           <div className="rounded-xl border border-border bg-card px-5 py-4 text-sm">
