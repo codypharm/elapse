@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "description": "elapse listen --forward: receive your Elapse webhooks on localhost. You only pay what elapsed.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elapsefinance/elapse.git",
+    "directory": "cli"
+  },
+  "homepage": "https://docs.elapse.finance",
+  "bugs": "https://github.com/elapsefinance/elapse/issues",
   "type": "module",
   "engines": {
     "node": ">=20"

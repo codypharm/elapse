@@ -3,9 +3,21 @@
   "version": "0.1.1",
   "description": "Per-second billing on Monad, integrated like Stripe. You only pay what elapsed.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/elapsefinance/elapse.git",
+    "directory": "sdk/ts"
+  },
+  "homepage": "https://docs.elapse.finance",
+  "bugs": "https://github.com/elapsefinance/elapse/issues",
   "type": "module",
-  "engines": { "node": ">=20" },
-  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
