@@ -171,7 +171,7 @@ describe("FR-API-071 mapping", () => {
     const types = (await sql`SELECT type FROM events ORDER BY seq`).map((e: any) => e.type);
     expect(types).toEqual(["checkout.session.completed", "subscription.created", "invoice.settled", "subscription.canceled"]);
     const [ev] = await sql`SELECT data FROM events WHERE type = 'subscription.canceled'`;
-    expect(ev.data.object).toMatchObject({ status: "canceled", ended_reason: "canceled", canceled_at: T0 + 220, seconds_elapsed: 220, settled_usd: "0.88", funded_usd: "14.4" });
+    expect(ev.data.object).toMatchObject({ status: "canceled", ended_reason: "canceled", canceled_at: T0 + 220, seconds_elapsed: 220, settled_usd: "0.88", amount_settled: "0.88", funded_usd: "14.4" });
     const ledger = (await sql`SELECT kind, amount_wei::text AS amount FROM ledger_entries ORDER BY seq`);
     expect(ledger).toEqual([
       { kind: "deposit", amount: "14400000" }, { kind: "settlement", amount: "871200" }, { kind: "fee", amount: "8800" }, { kind: "refund", amount: "13520000" },

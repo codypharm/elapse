@@ -164,7 +164,9 @@ async function applyLog(tx: SQL, sub: SubscriptionRow, body: IngestBody, chainEv
                  VALUES (${newId("ntf")}, ${sub.merchant_id}, ${sub.livemode}, 'payment_failed',
                          ${`Subscription ${sub.id} reached its cap after ${secondsElapsed} seconds and ended.`}, ${sub.id})`;
       }
-      await emit("subscription.canceled", serializeSubscription(after, ts));
+      // FR-API-071 / BR-API-008: the canceled Event carries the final total under the §5.3 name as well.
+      const canceled = serializeSubscription(after, ts);
+      await emit("subscription.canceled", { ...canceled, amount_settled: canceled.settled_usd });
       break;
     }
     default:
