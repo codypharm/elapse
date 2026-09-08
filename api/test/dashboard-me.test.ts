@@ -31,7 +31,7 @@ describe("FR-API-103 dashboard me", () => {
       name: null, // not onboarded yet: the dashboard shows first-run
       email: expect.stringContaining("@"),
       payout_address: "0x1111111111111111111111111111111111111111",
-      fee_bps: 100,
+      fee_bps: 200, // from the deployment record; 200 bps since ADR 2026-09-08
       branding: { display_name: null, logo_url: null, accent: null, support_url: null },
       notifications: { endpoint_exhausted_email: true, key_expiry_email: true },
       checklist: { key_created: true, product_created: false, endpoint_created: false, first_delivery_succeeded: false },

@@ -4,7 +4,7 @@
   "chainId": 10143,
   "deployedAtBlock": 60525591,
   "factory": "0x4B768dA0D29C084145f23Cd06b3b5fc2e07a2840",
-  "feeBps": 100,
+  "feeBps": 200,
   "implementation": "0x3Ccb83A576FD4f8b30b1E46441d89CD2AF4D5586",
   "keeper": "0x54669B09A651a72Bd0367caB21cdAd0bEC0a7d35",
   "mockUsd": "0xD9E7Fc7d58D97daC5dc5501404fc1073A8aBE6C1",

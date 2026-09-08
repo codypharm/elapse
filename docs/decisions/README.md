@@ -48,3 +48,5 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [Subscriber pause ships as a signed relay in the shape of cancel; "Stop" replaces "Cancel" on the subscriber side](./2026-09-07-subscriber-pause-signed-relay.md) | William |
 | 2026-09-07 | [The support URL is one field, in the business profile; checkout branding no longer repeats it](./2026-09-07-support-url-one-field-in-profile.md) | William |
 | 2026-09-07 | [Add money on the checkout when the wallet is short; live mode escrows AUSD on testnet](./2026-09-07-add-money-and-ausd-live-on-testnet.md) | William |
+| 2026-09-08 | [Keeper cadence moves from 5 minutes to 1 hour; amount-based settlement is the mainnet question](./2026-09-08-keeper-cadence-one-hour.md) | William |
+| 2026-09-08 | [Platform fee is 2 percent of each settlement](./2026-09-08-platform-fee-two-percent.md) | William, Furqaan |
