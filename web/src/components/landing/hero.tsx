@@ -1,16 +1,18 @@
 /**
  * `Hero` — the landing's first viewport and its focal moment.
  *
- * Left: the headline, one paragraph, two actions. Right: an instrument
- * panel — readout, Cancel, and the chart strip in one card — so the meter
- * reads as a device rather than numbers floating on a page. The demo
- * starts on its own shortly after load; Cancel lifts the pen, locks the
- * readout, and swaps the webhook card below to the visitor's numbers.
+ * Left: the headline, one paragraph for the merchant, two actions (one per
+ * reader: the engineer's quickstart, the founder's demo). Right: an
+ * instrument panel — readout, Cancel, the merchant's ledger of the same
+ * session, and the chart strip in one card — so the meter reads as a device
+ * rather than numbers floating on a page. The demo starts on its own shortly
+ * after load; Cancel lifts the pen, locks the readout, and swaps the webhook
+ * card below to the visitor's numbers.
  *
  * On phones the panel sits directly under the headline so the meter is in
  * the first viewport.
  *
- * Maps to: FR-LND-001…005; design brief §1.1, §1.5.
+ * Maps to: FR-LND-001…005, FR-LND-014, FR-LND-015; design brief §1.1, §1.5.
  */
 "use client";
 
@@ -20,10 +22,11 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ChartStrip, type Session } from "@/components/meter/chart-strip";
 import { Readout } from "@/components/meter/readout";
-import { formatUsd, wholeSeconds } from "@/lib/meter/math";
+import { formatUsd, parseRate, settledNano as settledNanoOf, wholeSeconds } from "@/lib/meter/math";
 import { useMeter } from "@/lib/meter/use-meter";
 import { demoProduct, links } from "@/lib/site";
 import { cn } from "@/lib/utils";
+import { MerchantReadout } from "./merchant-readout";
 import { WebhookCard } from "./webhook-card";
 
 const INSTALL = "npm install @elapse/sdk";
@@ -31,6 +34,7 @@ const AUTO_START_MS = 900;
 /** Below one cent the receipt shows three decimals so the number is real. */
 const ONE_CENT_NANO = 10_000_000n;
 const EXAMPLE = { seconds: 83, settled: "0.33", createdAt: 1_756_800_083 };
+const EXAMPLE_PAID_NANO = settledNanoOf(parseRate(demoProduct.rate), EXAMPLE.seconds);
 
 const arrive = { type: "tween", ease: [0.16, 1, 0.3, 1], duration: 0.6 } as const;
 
@@ -91,9 +95,9 @@ export function Hero() {
               transition={{ ...arrive, delay: 0.08 }}
               className="max-w-[42ch] text-pretty text-lg leading-snug text-ink-soft md:text-xl"
             >
-              Per-second subscriptions for APIs, GPUs, streams and SaaS. A
-              Stripe-shaped SDK, a hosted checkout, and signed webhooks. Your
-              server hears about it once, by webhook.
+              Charge for APIs, GPUs, streams and seats by the second, and get
+              paid out in dollars as it accrues. A Stripe-shaped SDK, a hosted
+              checkout, and signed webhooks: your server hears about it once.
             </motion.p>
             <motion.div
               initial={reduced ? false : { opacity: 0, y: 10 }}
@@ -102,20 +106,20 @@ export function Hero() {
               className="flex flex-wrap items-center gap-3"
             >
               <a
-                href={links.docs}
+                href={links.quickstart}
                 className={cn(buttonVariants({ size: "lg" }), "h-11 px-5 text-[15px]")}
               >
-                Read the docs
+                Start integrating
                 <ArrowRight data-icon="inline-end" className="size-4" />
               </a>
               <a
-                href={links.dashboard}
+                href="#merchants"
                 className={cn(
                   buttonVariants({ variant: "outline", size: "lg" }),
                   "h-11 px-5 text-[15px]",
                 )}
               >
-                Open dashboard
+                See the demo
               </a>
             </motion.div>
           </div>
@@ -166,6 +170,14 @@ export function Hero() {
                   </Button>
                 )}
               </div>
+            </div>
+            <div className="border-t border-border px-5 md:px-6">
+              <MerchantReadout
+                paidNano={startedAt ? settledNano : EXAMPLE_PAID_NANO}
+                seconds={startedAt ? seconds : EXAMPLE.seconds}
+                example={!startedAt}
+                className="py-1"
+              />
             </div>
             <div className="border-t border-border bg-paper/40">
               <ChartStrip sessions={sessions} height={112} level={0.58} />

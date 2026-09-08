@@ -1,5 +1,5 @@
 /**
- * `MeterVsMonth` — the problem, drawn: a monthly bill is a 30-cell strip
+ * `MeterVsMonth` — the problem, drawn (copy in the merchant's voice, FR-LND-019): a monthly bill is a 30-cell strip
  * with three cells used and twenty-seven paid for; a per-second meter is
  * a strip with only the used span inked. Both are inline SVG in the
  * chart-paper grammar so the comparison is the same material.
@@ -21,21 +21,22 @@ export function MeterVsMonth() {
       <div className="mx-auto grid max-w-[1280px] gap-x-12 gap-y-6 px-5 py-16 md:grid-cols-2 md:grid-rows-[auto_auto] md:px-8 md:py-20">
         <div className="flex flex-col gap-6 md:col-start-1 md:row-start-1">
           <h2 className="display-wide text-balance text-3xl font-semibold leading-tight tracking-[-0.03em] md:text-[2.5rem]">
-            Cancel on day 3, pay for 30. The meter is a lie.
+            Nobody churns from a meter they can stop.
           </h2>
           <p className="max-w-[48ch] text-pretty text-lg text-ink-soft">
-            Usage is continuous. Billing is not. Cards and slow settlement
-            made anything finer than a month uneconomic, so APIs, GPUs and
-            live streams round up or sell prepaid credits.
+            A monthly plan asks for commitment before the first minute of use,
+            and the 27 unused days are the reason a customer cancels at
+            renewal. Cards and slow settlement made anything finer than a
+            month uneconomic, so the industry rounds up.
           </p>
         </div>
         <div className="md:col-start-1 md:row-start-2 md:self-end">
           <MonthStrip />
         </div>
         <p className="max-w-[48ch] text-pretty text-lg text-ink-soft md:col-start-2 md:row-start-1 md:self-end mt-6 md:mt-0">
-          Elapse accrues every second and settles only what elapsed. Cancel
-          mid-second and the unused funds are already yours. Your server
-          hears about it once, by webhook.
+          With a meter, more people start because nothing is asked up front,
+          and revenue grows with use instead of resetting at renewal. Elapse
+          settles what elapsed; your server hears about it once, by webhook.
         </p>
         <div className="md:col-start-2 md:row-start-2 md:self-end">
           <SecondStrip />

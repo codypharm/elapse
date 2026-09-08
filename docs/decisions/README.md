@@ -50,3 +50,4 @@ What this makes easier, what it rules out, what to watch.
 | 2026-09-07 | [Add money on the checkout when the wallet is short; live mode escrows AUSD on testnet](./2026-09-07-add-money-and-ausd-live-on-testnet.md) | William |
 | 2026-09-08 | [Keeper cadence moves from 5 minutes to 1 hour; amount-based settlement is the mainnet question](./2026-09-08-keeper-cadence-one-hour.md) | William |
 | 2026-09-08 | [Platform fee is 2 percent of each settlement](./2026-09-08-platform-fee-two-percent.md) | William, Furqaan |
+| 2026-09-08 | [The landing speaks to founders and finance owners as well as engineers](./2026-09-08-landing-for-founders-and-finance.md) | William |

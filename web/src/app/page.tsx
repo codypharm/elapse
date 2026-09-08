@@ -3,7 +3,8 @@
  * client island.
  *
  * Reading order: the meter you can cancel → install → three steps →
- * the monthly lie → the event catalog → tariff → Stripe-shaped close.
+ * the monthly lie → who it is for → the money → the event catalog →
+ * Stripe-shaped close (FR-LND-014–019).
  *
  * Maps to: design brief Surface 1; surface brief .impeccable/surfaces.
  */
@@ -13,7 +14,8 @@ import { Hero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { MeterVsMonth } from "@/components/landing/meter-vs-month";
 import { EventCatalog } from "@/components/landing/event-catalog";
-import { Tariff } from "@/components/landing/tariff";
+import { Merchants } from "@/components/landing/merchants";
+import { TheMoney } from "@/components/landing/the-money";
 import { StripeShaped } from "@/components/landing/stripe-shaped";
 
 export default function Home() {
@@ -24,8 +26,9 @@ export default function Home() {
         <Hero />
         <HowItWorks />
         <MeterVsMonth />
+        <Merchants />
+        <TheMoney />
         <EventCatalog />
-        <Tariff />
         <StripeShaped />
       </main>
       <SiteFooter />

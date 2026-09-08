@@ -96,11 +96,12 @@ export type FormatUsdOptions = {
  * subscriber never sees a cent they have not yet accrued.
  *
  * @param nano - Amount in nano-dollars.
- * @param decimals - 2 for receipts and tables, 3 for the live counter.
+ * @param decimals - 2 for receipts and tables, 3 for the live counter, 4 for the
+ *   merchant readout's first seconds (FR-LND-015).
  */
 export function formatUsd(
   nano: bigint,
-  decimals: 2 | 3 = 2,
+  decimals: 2 | 3 | 4 = 2,
   { symbol = true }: FormatUsdOptions = {},
 ): string {
   const negative = nano < 0n;

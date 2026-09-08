@@ -4,6 +4,7 @@
  */
 export const links = {
   docs: "https://docs.elapse.finance",
+  quickstart: "https://docs.elapse.finance/quickstart",
   github: "https://github.com/elapsefinance/elapse",
   dashboard: "/dashboard",
   x: "https://x.com/elapsefinance",
