@@ -1,0 +1,14 @@
+# Build context is the repo root (api/Dockerfile). Keep the context small and secret-free.
+**/node_modules
+**/.env
+**/.env.*
+!**/.env.example
+.git
+web/.next
+docs-site/.mintlify
+contracts/out
+contracts/cache
+contracts/lib
+indexer/generated
+**/coverage
+**/*.log
