@@ -1,5 +1,5 @@
 /**
- * FR-DOC-002: the left nav has exactly nine top-level entries in this order.
+ * FR-DOC-002: the left nav has exactly ten top-level entries in this order (Payouts added by FR-DOC-046).
  * FR-DOC-025: no placeholder pages. Read straight from docs.json.
  */
 import { readFileSync } from "node:fs";
@@ -12,12 +12,13 @@ const docs = JSON.parse(readFileSync(new URL("../site/docs.json", import.meta.ur
 const title = (e: string | { group: string }) => (typeof e === "string" ? e : e.group);
 
 describe("FR-DOC-002 navigation", () => {
-  it("has the nine entries in order", () => {
+  it("has the ten entries in order", () => {
     expect(docs.navigation.pages.map(title)).toEqual([
       "introduction",
       "quickstart",
       "checkout",
       "subscriptions",
+      "payouts",
       "Webhooks",
       "sdks",
       "API reference",
