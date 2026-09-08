@@ -154,3 +154,4 @@ examples/saas/src/*.ts       region source
 | 2026-09-07 | Claude (for William) | Quickstart step 1 names the payout address as a prerequisite (API FR-API-035 refuses checkout links without one). |
 | 2026-09-08 | Claude (for William) | FR-DOC-046 payouts page written; the dashboard's cash-out sheet linked to a 404 (William). Built with the page. |
 | 2026-09-08 | Claude (for William) | FR-DOC-002 amended from nine to ten entries to admit Payouts; the nav snapshot test had not been updated with FR-DOC-046 and failed in CI. |
+| 2026-09-08 | Claude (for William) | Judge pass on the hosted app: `https://api.elapse.finance` resolves, so per BR-DOC-008 it is now written in the Quickstart, Authentication, and the example's env file and README instead of a placeholder. Quickstart prose names the Product values and the create call, says `npx` needs no install, and ties `session.url` to the last step. |

@@ -17,7 +17,7 @@ It is the code the [Quickstart](https://docs.elapse.finance/quickstart) is built
 ```sh
 git clone https://github.com/elapsefinance/elapse
 cd elapse/examples/saas
-cp .env.example .env        # paste ELAPSE_SECRET_KEY and ELAPSE_API_URL
+cp .env.example .env        # paste ELAPSE_SECRET_KEY
 npm install
 npm start
 ```

@@ -22,7 +22,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
 
     ```bash
     export ELAPSE_SECRET_KEY=sk_test_…
-    export ELAPSE_API_URL=https://…        # see Authentication
+    export ELAPSE_API_URL=https://api.elapse.finance
     ```
   </Step>
 
@@ -33,7 +33,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
         npm install @elapse/sdk
         ```
         <ExampleClient />
-        `secretKey` and `apiUrl` come from the environment. Pass `baseUrl` explicitly for now; see [Authentication](/api-reference/authentication) for why.
+        `secretKey` and `apiUrl` come from the environment. The hosted API is `https://api.elapse.finance`; pass it as `baseUrl` explicitly, see [Authentication](/api-reference/authentication) for why.
       </Tab>
       <Tab title="cURL">
         ```bash
@@ -50,7 +50,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
     <Tabs>
       <Tab title="TypeScript">
         <ExampleProduct />
-        The example looks for a Product with the same name first, so restarting your server does not litter the dashboard.
+        `PRODUCT` is `{ name: "GPU · 4090", rateUsdPerSecond: "0.004" }`. The second line is the create call; the first looks for a Product with the same name, so restarting your server does not litter the dashboard.
       </Tab>
       <Tab title="cURL">
         ```bash
@@ -67,7 +67,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
     <Tabs>
       <Tab title="TypeScript">
         <ExampleSession />
-        Send the subscriber to `session.url`. When they stop, Elapse returns them to `success_url` with `?session_id=cs_…` appended.
+        Send the subscriber to `session.url`; it is the link you open in the last step. When they stop, Elapse returns them to `success_url` with `?session_id=cs_…` appended.
       </Tab>
       <Tab title="cURL">
         ```bash
@@ -105,7 +105,7 @@ Every snippet on this page is extracted from the finished merchant in [`examples
     npx @elapse/cli listen --forward localhost:3000/webhooks
     ```
 
-    The first line it prints is your signing secret. Put it in `ELAPSE_WEBHOOK_SECRET` and restart your server. Then you will see:
+    `npx` fetches the CLI from npm on first run; there is nothing to install. The first line it prints is your signing secret. Put it in `ELAPSE_WEBHOOK_SECRET` and restart your server. Then you will see:
 
     <CliListen />
   </Step>

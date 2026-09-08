@@ -16,7 +16,7 @@ export class ConfigError extends Error {}
 const WHERE: Record<string, string> = {
   ELAPSE_SECRET_KEY: "Dashboard → Developers → API keys → Create.",
   ELAPSE_WEBHOOK_SECRET: "Printed by: npx @elapse/cli listen --forward localhost:3000/webhooks",
-  ELAPSE_API_URL: "The hosted Elapse API; see the docs Authentication page.",
+  ELAPSE_API_URL: "The hosted Elapse API, https://api.elapse.finance.",
 };
 
 export function loadConfig(env: Record<string, string | undefined>): Config {
