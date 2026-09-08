@@ -74,7 +74,7 @@ audit and reverse by hand (FR-IDX-033) until the Week 4 `reconcile` script exist
 
 Root directory `indexer/`, config `config.yaml`, Node 24. Environment variables on the hosted
 service must be prefixed `ENVIO_`, hence `ENVIO_INGEST_URL` and `ENVIO_INGEST_TOKEN`.
-Static GraphQL endpoint (deployed 2026-09-08, William): `https://indexer.hyperindex.xyz/a436687/v1/graphql` — the value of `INDEXER_GRAPHQL_URL` on the Railway api service. The plan allows three deployments; every push to `master` creates one, so delete superseded deployments only after the new one is synced and the static endpoint points at it. Variable values on Envio are literal: no quotes.
+Static GraphQL endpoint (deployed 2026-09-08, William, recreated the same day from the `codypharm/elapse` fork after the repo left the org): `https://indexer.hyperindex.xyz/2adf0f0/v1/graphql` — the value of `INDEXER_GRAPHQL_URL` on the Railway api service. The plan allows three deployments; every push to `master` creates one, so delete superseded deployments only after the new one is synced and the static endpoint points at it. Variable values on Envio are literal: no quotes.
 
 ## Deferred to Week 4
 
