@@ -3,7 +3,7 @@
  *
  * Header: AUSD at the merchant's own payout address (never an "Elapse
  * balance"), the shortened address with copy and explorer link, settled
- * this month net. "Withdraw to bank" opens a sheet that states what a
+ * this month net. "Cash out" opens a sheet that states what a
  * merchant can do today; there is no integration behind it for 13 Oct.
  * Then the append-only ledger: deposit, settlement, fee, refund rows with
  * filters, per-kind totals, CSV, and reversed rows kept and marked.
@@ -93,7 +93,7 @@ export function BalancePage() {
         actions={
           <Button onClick={() => setWithdraw(true)} className="h-9" disabled={!data?.balance.payoutAddress}>
             <Landmark data-icon="inline-start" className="size-4" />
-            Withdraw to bank
+            Cash out
           </Button>
         }
       />
@@ -227,7 +227,7 @@ export function BalancePage() {
       <Sheet open={withdraw} onOpenChange={setWithdraw}>
         <SheetContent side="right" className="gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-md">
           <SheetHeader className="border-b border-border px-5 py-4 pr-14">
-            <SheetTitle>Withdraw to bank</SheetTitle>
+            <SheetTitle>Cash out to your bank</SheetTitle>
             <SheetDescription>The funds are already yours. Here is how to turn AUSD into money in a bank account today.</SheetDescription>
           </SheetHeader>
           <div className="flex flex-col gap-5 px-5 py-5 text-[14px]">
@@ -241,7 +241,7 @@ export function BalancePage() {
               <li className="flex gap-3">
                 <span className="numerals w-5 shrink-0 text-ink-soft">2</span>
                 <span>
-                  Move AUSD from that address to an exchange or off-ramp that supports Monad and AUSD, then sell for dollars and withdraw to your bank. The docs keep a current list of providers and their fees.
+                  Move AUSD from that address to an exchange or off-ramp that supports AUSD on Monad, or redeem it with the issuer, then withdraw dollars to your bank. The payouts guide walks through it.
                 </span>
               </li>
               <li className="flex gap-3">
@@ -250,7 +250,7 @@ export function BalancePage() {
               </li>
             </ol>
             <a href={`${links.docs}/payouts`} target="_blank" rel="noreferrer" className={cn(buttonVariants(), "h-10 w-full")}>
-              How to cash out
+              Read the payouts guide
               <ArrowUpRight data-icon="inline-end" className="size-4" />
             </a>
             <p className="text-[12px] text-ink-soft">

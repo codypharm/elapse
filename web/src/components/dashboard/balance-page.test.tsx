@@ -55,15 +55,15 @@ describe("Balance & payouts", () => {
     expect(screen.getByRole("link", { name: /set it in settings/i })).toHaveAttribute("href", "/dashboard/settings");
   });
 
-  it("withdraw opens a sheet that explains today's path and never says coming soon (FR-DSH-121, BR-DSH-013)", async () => {
+  it("cash out opens a sheet that explains today's path and never says coming soon (FR-DSH-121, BR-DSH-013)", async () => {
     const user = userEvent.setup();
     const m = await signIn(api);
     mount(api, m);
-    await user.click(await screen.findByRole("button", { name: /withdraw to bank/i }));
+    await user.click(await screen.findByRole("button", { name: /^cash out$/i }));
     const sheet = await screen.findByRole("dialog");
     expect(sheet).toHaveTextContent(/already yours/i);
     expect(sheet).not.toHaveTextContent(/coming soon/i);
-    expect(within(sheet).getByRole("link", { name: /how to cash out/i })).toHaveAttribute("href", expect.stringContaining("docs"));
+    expect(within(sheet).getByRole("link", { name: /payouts guide/i })).toHaveAttribute("href", expect.stringContaining("docs.elapse.finance/payouts"));
   });
 
   it("lists the ledger with kinds, signed amounts, tx links; filters by kind; marks reversed rows (FR-DSH-122/124)", async () => {

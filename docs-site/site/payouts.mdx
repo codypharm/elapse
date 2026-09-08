@@ -1,0 +1,41 @@
+---
+title: "Payouts"
+description: "Where the money goes: settlement to your payout address, the fee, the ledger, and how to turn AUSD into dollars in a bank account."
+---
+
+Elapse has no balance to withdraw. Every settlement pays your payout address directly, so the money is yours the moment a meter settles.
+
+## Settlement
+
+A running meter settles once an hour, and at once when it stops, pauses at its cap, or reaches its cap. Each settlement moves the seconds that elapsed since the last one:
+
+| To | Amount |
+| --- | --- |
+| Your payout address | elapsed seconds × rate, minus the fee |
+| Elapse | the platform fee, a percentage of the settled amount |
+
+The fee is a share of settled seconds only. Refunds of unused funds carry no fee. The current rate is shown on your dashboard's Settings page and on every Invoice.
+
+Each settlement is an Invoice in the dashboard and an `invoice.settled` event to your webhook endpoints.
+
+## Your payout address
+
+Set it under **Settings → Payout** in the dashboard. It receives AUSD on Monad. Changing it re-asks for the full address, writes the audit log, and applies to settlements from that moment; a running meter keeps paying the address it started with until it settles.
+
+## The ledger
+
+**Balance & payouts** in the dashboard lists every money movement from the contract events: deposits into a meter, settlements to you, fees, and refunds to the subscriber. Each row carries the transaction hash, so any of them can be checked on the explorer. Filter by kind, subscription, or date, and export the same columns as CSV for your books.
+
+## Turning AUSD into dollars
+
+AUSD is a dollar stablecoin issued by [Agora](https://www.agora.finance). Your payout address holds AUSD on Monad, and getting it into a bank account is the same as for any stablecoin:
+
+1. Move AUSD from your payout address to an account at an exchange or off-ramp that supports AUSD on Monad. Agora's own site lists where AUSD is supported and how businesses redeem it directly.
+2. Sell for dollars there, or redeem with the issuer.
+3. Withdraw to your bank.
+
+Elapse does not touch this step today. A one-click bank withdrawal from the dashboard is on the roadmap after 13 October and will use the same payout address, so nothing changes for you when it lands.
+
+<Note>
+On testnet, settlements pay a test token with no value. Live mode on testnet settles in real AUSD; check which mode a key is in before treating a figure as money.
+</Note>
