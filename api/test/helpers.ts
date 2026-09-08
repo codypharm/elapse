@@ -6,9 +6,10 @@ import { app } from "../src/app";
 // Note for test authors: Bun 1.4's `toMatchObject` with asymmetric matchers (expect.any …) mutates the
 // received object. Clone first (`structuredClone(body)`) if you read the object again afterwards.
 
-/** Truncate every merchant-scoped table (cascades from merchants). */
+/** Truncate every merchant-scoped table (cascades from merchants) and the unscoped samples. */
 export async function resetDb(): Promise<void> {
   await sql`TRUNCATE merchants CASCADE`;
+  await sql`TRUNCATE relayer_balance_samples`;
 }
 
 export interface Fixture {

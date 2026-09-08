@@ -1,3 +1,4 @@
+import { relayerRunway } from "../db/relayer-runway";
 import { createRoute, z } from "@hono/zod-openapi";
 import { config } from "../config";
 import { sql } from "../db/client";
@@ -37,6 +38,17 @@ export const StatusSchema = z
       success_rate_1h: z.number().nullable(),
       keeper_last_tick_at: z.number().int().nullable(),
     }),
+    relayer: z
+      .object({
+        address: z.string().nullable().openapi({ description: "The relayer (factory keeper); pays gas, never holds AUSD." }),
+        balance_mon: z.string().nullable().openapi({ description: "Native MON at the newest worker sample (FR-WRK-074), decimal string." }),
+        sampled_at: z.number().int().nullable(),
+        burn_mon_per_hour: z.number().nullable().openapi({ description: "Balance drop over the last hour, scaled to an hour; null after a top-up or with one sample." }),
+        hours_left: z.number().nullable(),
+        low: z.boolean().openapi({ description: "hours_left under RELAYER_LOW_HOURS (24) or balance under RELAYER_LOW_MON (1). Alert on this." }),
+        stale: z.boolean().openapi({ description: "Newest sample older than 120 s: the worker is not sampling." }),
+      })
+      .openapi({ description: "FR-API-075. Read from worker samples, never from the RPC on request." }),
   })
   .openapi("Status");
 
@@ -57,6 +69,7 @@ status.openapi(
     const [queue] = await sql`SELECT count(*)::int AS queued, COALESCE(extract(epoch FROM now() - min(created_at)), 0)::int AS oldest
                               FROM deliveries WHERE status IN ('queued', 'retrying')`;
     const health = await workerHealth();
+    const relayer = await relayerRunway(chainId);
     let indexer: z.infer<typeof StatusSchema>["indexer"];
     try {
       const s = await indexerReader()(chainId);
@@ -88,6 +101,7 @@ status.openapi(
           success_rate_1h: health.success_rate_1h,
           keeper_last_tick_at: health.keeper_last_tick_at,
         },
+        relayer,
       },
       200,
     );

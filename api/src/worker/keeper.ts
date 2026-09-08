@@ -13,6 +13,8 @@
  * reverting stream is skipped (and logged at most hourly), and the batch is gassed from the sum.
  */
 import type { Address } from "viem";
+import { config } from "../config";
+import { sampleRelayerBalance } from "./relayer-balance";
 import { sql } from "../db/client";
 import { chainClient } from "../chain/relayer";
 import { sleep } from "./sleep";
@@ -101,6 +103,8 @@ export async function runKeeperOnce(o: { now?: number; batch?: number; cadenceS?
       }
     }
   }
+  // FR-WRK-074: the gas sample rides on the tick; its failure never touches the settle result.
+  await sampleRelayerBalance(Number(process.env.CHAIN_ID ?? config.chains.test), now, log);
   return { settled, skipped, failed };
 }
 

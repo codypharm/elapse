@@ -2,7 +2,7 @@ import type { Address, Hex } from "viem";
 import type { ChainClient, CreateWithPermitArgs, StreamLog, StreamState } from "../src/chain/relayer";
 
 /** In-memory chain: nonces, balances, and a log of every write. */
-export function fakeChain(opts: { chainId?: number; balances?: Record<string, bigint> } = {}) {
+export function fakeChain(opts: { chainId?: number; balances?: Record<string, bigint>; nativeBalances?: Record<string, bigint> } = {}) {
   const chainId = opts.chainId ?? 10143;
   const balances = new Map<string, bigint>(Object.entries(opts.balances ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
   const nonces = new Map<string, bigint>();
@@ -19,7 +19,8 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
   const streamStates = new Map<string, StreamState | Error>();
   const streamLogs = new Map<string, StreamLog[]>();
   const logQueries: Array<{ chainId: number; stream: string; fromBlock: number }> = [];
-  const state = { failNextSettle: null as Error | null, receiptLogs: null as number | null };
+  const state = { failNextSettle: null as Error | null, receiptLogs: null as number | null, failNextNativeRead: null as Error | null };
+  const nativeBalances = new Map<string, bigint>(Object.entries(opts.nativeBalances ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
   const cancelNonces = new Map<string, bigint>();
   let n = 0;
   // Own hash space (`0xfa…`): the ingest fixtures count from 0x…1 too, and a shared value would deduplicate a log.
@@ -34,6 +35,14 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
     },
     async readBalance(_c, _t, owner) {
       return balances.get(owner.toLowerCase()) ?? 0n;
+    },
+    async readNativeBalance(_c, owner) {
+      if (state.failNextNativeRead) {
+        const e = state.failNextNativeRead;
+        state.failNextNativeRead = null;
+        throw e;
+      }
+      return nativeBalances.get(owner.toLowerCase()) ?? 0n;
     },
     async mintMock(_c, _t, to, amount) {
       mints.push({ to: to.toLowerCase(), amount });
@@ -95,7 +104,7 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
     },
   };
   return {
-    client, mints, creates, cancels, pauses, resumes, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces,
+    client, mints, creates, cancels, pauses, resumes, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces, nativeBalances, state,
     set failNextSettle(e: Error | null) {
       state.failNextSettle = e;
     },

@@ -29,6 +29,8 @@ export interface ChainClient {
   readPermitDomain(chainId: number, token: Address): Promise<PermitDomain>;
   readNonce(chainId: number, token: Address, owner: Address): Promise<bigint>;
   readBalance(chainId: number, token: Address, owner: Address): Promise<bigint>;
+  /** Native MON balance in wei, for the relayer gas sample (worker FR-WRK-074). */
+  readNativeBalance(chainId: number, owner: Address): Promise<bigint>;
   /** Testnet only: mint MockUSD so a test checkout never needs a faucet (FR-API-032). Waits for the receipt. */
   mintMock(chainId: number, token: Address, to: Address, amount: bigint): Promise<Hex>;
   /** Submits `StreamFactory.createWithPermit`; resolves with the tx hash as soon as it is broadcast. */
@@ -124,6 +126,10 @@ export function viemChainClient(env: { privateKey: Hex; rpcUrl: string; chainId:
     async readBalance(chainId, token, owner) {
       assertChain(chainId);
       return publicClient.readContract({ address: token, abi: permitTokenAbi, functionName: "balanceOf", args: [owner] });
+    },
+    async readNativeBalance(chainId, owner) {
+      assertChain(chainId);
+      return publicClient.getBalance({ address: owner });
     },
     async mintMock(chainId, token, to, amount) {
       assertChain(chainId);
