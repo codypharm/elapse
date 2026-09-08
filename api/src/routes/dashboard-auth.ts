@@ -1,6 +1,7 @@
 import { createRoute, z } from "@hono/zod-openapi";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { config } from "../config";
+import { magicLinkMail } from "../lib/mail-templates";
 import { createApiKey } from "../db/api-keys";
 import { consumeMagicLink, issueMagicLink, MagicLinkRateLimited } from "../db/magic-links";
 import { createMerchant, findMerchantByEmail, type Merchant } from "../db/merchants";
@@ -50,12 +51,8 @@ dashboardAuth.openapi(
       throw e;
     }
     const link = `${config.dashboardOrigin}/login/verify?token=${token}`;
-    await sendEmail({
-      to: email,
-      subject: "Sign in to Elapse",
-      text: `Sign in to your Elapse dashboard:\n\n${link}\n\nThis link works once and expires in 15 minutes. If you did not request it, ignore this email.`,
-      html: `<p>Sign in to your Elapse dashboard:</p><p><a href="${link}">${link}</a></p><p>This link works once and expires in 15 minutes. If you did not request it, ignore this email.</p>`,
-    });
+    // The logo is the web app's PNG mark (email clients refuse SVG); same origin as the link.
+    await sendEmail({ to: email, ...magicLinkMail({ link, logoUrl: `${new URL(config.checkoutBaseUrl).origin}/apple-icon.png` }) });
     // Local development has no inbox: hand the token to the login page so sign-in completes in the browser.
     return c.json({ sent: true as const, ...(mailIsDevOnly() ? { dev_token: token } : {}) }, 200);
   },
