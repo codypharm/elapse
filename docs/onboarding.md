@@ -15,7 +15,7 @@ There is no root env file. Each process loads its own, and each package ships an
 | Package | Env file | Loaded by |
 | --- | --- | --- |
 | `api/` (API and worker) | `api/.env` from `api/.env.example` | Bun, automatically |
-| `web/` | `web/.env.local` | Next.js |
+| `web/` | `web/.env.local` from `web/.env.example` (all `NEXT_PUBLIC_*`, baked in at build) | Next.js |
 | `indexer/` | `indexer/.env` from `indexer/.env.example` | Envio |
 | `examples/saas/` | `examples/saas/.env` from its `.env.example` | dotenv |
 
