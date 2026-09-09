@@ -7,6 +7,11 @@
  * The session itself is an HttpOnly cookie the API sets (the mock stands it
  * in with localStorage). JavaScript never reads it; it only asks `me()`.
  *
+ * While `me()` is in flight the real shell renders with `merchant: null`,
+ * so a refresh shows the wordmark, the sections and the top bar at once and
+ * only the page slot waits. The page slot carries the same title-and-table
+ * shape every page resolves into, so nothing jumps when the answer lands.
+ *
  * Maps to: FR-DSH-012, FR-DSH-013, FR-DSH-014.
  */
 "use client";
@@ -20,6 +25,7 @@ import { DashboardApiError, type DashboardApi } from "@/lib/dashboard/mock-api";
 import type { Merchant } from "@/lib/dashboard/types";
 import { FirstRunForm } from "./first-run-form";
 import { MerchantProvider } from "./merchant-context";
+import { Page } from "./page-header";
 import { DashboardShell } from "./shell";
 
 type Load =
@@ -61,7 +67,13 @@ export function DashboardGate({ api: injected, children }: { api?: DashboardApi;
     router.replace("/login");
   }, [api, router]);
 
-  if (load.status === "loading" || load.status === "redirecting") return <GateSkeleton />;
+  if (load.status === "loading" || load.status === "redirecting") {
+    return (
+      <DashboardShell merchant={null}>
+        <PagePlaceholder />
+      </DashboardShell>
+    );
+  }
 
   if (load.status === "error") {
     return (
@@ -95,22 +107,34 @@ export function DashboardGate({ api: injected, children }: { api?: DashboardApi;
   );
 }
 
-function GateSkeleton() {
+/**
+ * The page slot while the session loads: a title line, a lede, then a ruled
+ * table of hairline rows, the shape every list page settles into. The text
+ * is for screen readers; sighted users read the shape.
+ */
+function PagePlaceholder() {
   return (
-    <div className="flex min-h-dvh bg-background" aria-busy>
-      <div className="hidden w-[232px] shrink-0 border-r border-border p-4 lg:block">
-        <Skeleton className="h-5 w-24" />
-        <div className="mt-8 flex flex-col gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-4 w-32" />
-          ))}
+    <Page>
+      <span className="sr-only">Loading your dashboard</span>
+      <Skeleton className="h-7 w-40" aria-hidden />
+      <Skeleton className="mt-3 h-4 w-64 max-w-full" aria-hidden />
+      <div className="mt-8 divide-y divide-border rounded-md border border-border" aria-hidden>
+        <div className="flex h-10 items-center gap-6 px-4">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="ml-auto h-3 w-16" />
+          <Skeleton className="hidden h-3 w-16 sm:block" />
         </div>
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="flex h-16 items-center gap-6 px-4">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <Skeleton className="h-4 w-32 max-w-[60%]" />
+              <Skeleton className="h-3 w-52 max-w-[80%]" />
+            </div>
+            <Skeleton className="h-4 w-14" />
+            <Skeleton className="hidden h-4 w-14 sm:block" />
+          </div>
+        ))}
       </div>
-      <div className="flex-1">
-        <div className="flex h-14 items-center border-b border-border px-6">
-          <Skeleton className="h-4 w-28" />
-        </div>
-      </div>
-    </div>
+    </Page>
   );
 }

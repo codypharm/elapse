@@ -50,6 +50,28 @@ describe("DashboardGate", () => {
     expect(screen.getByRole("banner")).toHaveTextContent("Nimbus");
   });
 
+  it("shows the real chrome while the session loads, never a blank page (FR-DSH-012)", async () => {
+    const api = createMockDashboardApi({ latencyMs: 50 });
+    const { devToken } = await api.requestMagicLink("demo@elapse.finance");
+    await api.verifyMagicLink(devToken);
+    render(
+      <DashboardGate api={api}>
+        <p>secret</p>
+      </DashboardGate>,
+    );
+    // Before `me()` answers: the wordmark and the section list are already
+    // on screen, the page area says it is loading, and nothing is blank.
+    expect(screen.getByRole("link", { name: "Products" })).toBeInTheDocument();
+    expect(screen.getByRole("banner")).toBeInTheDocument();
+    const main = screen.getByRole("main");
+    expect(main).toHaveAttribute("aria-busy", "true");
+    expect(main).toHaveTextContent(/loading/i);
+    expect(screen.queryByText("secret")).not.toBeInTheDocument();
+    // After: the page replaces the placeholder and the busy flag clears.
+    expect(await screen.findByText("secret")).toBeInTheDocument();
+    expect(screen.getByRole("main")).not.toHaveAttribute("aria-busy", "true");
+  });
+
   it("asks a new merchant for a business name first (FR-DSH-013)", async () => {
     const user = userEvent.setup();
     const api = createMockDashboardApi({ latencyMs: 0 });

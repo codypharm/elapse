@@ -7,7 +7,12 @@
  * Everything inherits the Strip-Chart world: hairlines, tonal steps, no
  * shadows on the page, one accent (amber) reserved for what is live.
  *
- * Maps to: FR-DSH-001, FR-DSH-002, FR-DSH-003, FR-DSH-009.
+ * With `merchant: null` the shell is the loading frame: the wordmark, the
+ * section list and the top bar are real from the first paint; only the
+ * merchant name and the account button are placeholders, and the page slot
+ * is marked busy. A refresh therefore never shows a blank page (FR-DSH-012).
+ *
+ * Maps to: FR-DSH-001, FR-DSH-002, FR-DSH-003, FR-DSH-009, FR-DSH-012.
  */
 "use client";
 
@@ -26,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Toaster } from "@/components/ui/sonner";
 import { Logo } from "@/components/site/logo";
 import { ThemeToggle } from "@/components/site/theme-toggle";
@@ -45,7 +51,8 @@ export function DashboardShell({
   onSignOut,
   children,
 }: {
-  merchant: Merchant;
+  /** `null` while the session loads: chrome renders, merchant spots are placeholders. */
+  merchant: Merchant | null;
   onSignOut?: () => void;
   children: React.ReactNode;
 }) {
@@ -92,14 +99,21 @@ export function DashboardShell({
           >
             <Menu className="size-5" />
           </Button>
-          <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">
-            {merchant.name ?? merchant.email}
-          </span>
+          {merchant ? (
+            <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">
+              {merchant.name ?? merchant.email}
+            </span>
+          ) : (
+            <Skeleton className="h-4 w-28" aria-hidden />
+          )}
 
           <div className="ml-auto flex items-center gap-1.5 md:gap-2">
             <ModeToggle />
             <SearchBox api={api} className="hidden md:block" />
             <NotificationsBell api={api} />
+            {merchant === null ? (
+              <Skeleton className="size-8 rounded-full" aria-hidden />
+            ) : (
             <DropdownMenu>
               <DropdownMenuTrigger
                 render={
@@ -126,13 +140,16 @@ export function DashboardShell({
                 <DropdownMenuItem onClick={onSignOut}>Sign out</DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
           </div>
         </header>
 
         <ModeBanner />
-        <PayoutBanner merchant={merchant} />
+        {merchant && <PayoutBanner merchant={merchant} />}
 
-        <main className="flex min-w-0 flex-1 flex-col">{children}</main>
+        <main className="flex min-w-0 flex-1 flex-col" aria-busy={merchant === null || undefined}>
+          {children}
+        </main>
       </div>
 
       <Toaster position="bottom-right" />
