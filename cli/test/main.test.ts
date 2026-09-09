@@ -47,6 +47,14 @@ describe("FR-CLI-024 help lists exactly the commands", () => {
     expect(await main(["--version"], io())).toBe(0);
     expect(out.join("\n")).toMatch(/^0\.\d+\.\d+$/m);
   });
+
+  test("--version and the usage banner print the version from package.json, never a stale constant", async () => {
+    const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
+    expect(await main(["--version"], io())).toBe(0);
+    expect(out.join("\n").trim()).toBe(pkg.version);
+    expect(await main(["--help"], io())).toBe(0);
+    expect(out.join("\n")).toContain(`elapse ${pkg.version} —`);
+  });
 });
 
 describe("FR-CLI-001 / FR-CLI-032 auth and exit codes", () => {

@@ -1,6 +1,12 @@
+import { readFileSync } from "node:fs";
 import { STATUS_CODES } from "node:http";
 
-export const CLI_VERSION = "0.1.0";
+/**
+ * The published version, read from the package manifest so `--version`, the usage banner and the
+ * User-Agent never drift from what npm shipped. `../package.json` resolves from `src/` and from
+ * the built `dist/elapse.js` alike.
+ */
+export const CLI_VERSION: string = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
 
 export type ForwardResult =
   | { ok: true; status: number; statusText: string; durationMs: number }
