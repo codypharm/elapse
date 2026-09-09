@@ -107,6 +107,10 @@ Every snippet on this page is extracted from the finished merchant in [`examples
 
     `npx` fetches the CLI from npm on first run; there is nothing to install. The first line it prints is your signing secret. Put it in `ELAPSE_WEBHOOK_SECRET` and restart your server. Then you will see:
 
+    <Note>
+    The CLI registers a webhook endpoint for you; it appears on the dashboard under Developers → Webhooks as `cli://`. In production you add your own `https://` URL there instead, copy the secret it shows once into your server's environment, and Elapse delivers straight to it with retries. Your server code is the same in both cases.
+    </Note>
+
     <CliListen />
   </Step>
 

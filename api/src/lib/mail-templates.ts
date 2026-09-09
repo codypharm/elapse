@@ -29,6 +29,10 @@ interface Shell {
   title: string;
   heading: string;
   body: string;
+  /** Label and value pairs rendered as a two-column table under the body (receipts). */
+  rows?: [string, string][];
+  /** A line under the rows, before the button. */
+  after?: string;
   button: { label: string; href: string };
   linkIntro: string;
   footer: string;
@@ -53,6 +57,12 @@ function shell(o: Shell): string {
 </td></tr>
 <tr><td style="padding:28px 28px 0 28px;font-family:${FONT};font-size:22px;line-height:28px;font-weight:700;letter-spacing:-0.01em;color:${INK};">${escapeHtml(o.heading)}</td></tr>
 <tr><td style="padding:10px 28px 0 28px;font-family:${FONT};font-size:15px;line-height:22px;color:${INK_SOFT};">${escapeHtml(o.body)}</td></tr>
+${o.rows && o.rows.length ? `<tr><td style="padding:20px 28px 0 28px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid ${HAIRLINE};">
+${o.rows.map(([k, v]) => `    <tr><td style="padding:9px 0;border-bottom:1px solid ${HAIRLINE};font-family:${FONT};font-size:13px;line-height:18px;color:${INK_SOFT};">${escapeHtml(k)}</td><td align="right" style="padding:9px 0;border-bottom:1px solid ${HAIRLINE};font-family:${/^[$\d—]/.test(v) ? MONO : FONT};font-size:13px;line-height:18px;color:${INK};white-space:nowrap;">${escapeHtml(v)}</td></tr>`).join("\n")}
+  </table>
+</td></tr>` : ""}
+${o.after ? `<tr><td style="padding:16px 28px 0 28px;font-family:${FONT};font-size:14px;line-height:21px;color:${INK_SOFT};">${escapeHtml(o.after)}</td></tr>` : ""}
 <tr><td style="padding:24px 28px 0 28px;">
   <table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>
     <td style="background:${INK};border-radius:8px;">
@@ -107,4 +117,60 @@ export function noticeMail(o: { subject: string; heading: string; summary: strin
   });
   const text = `${o.heading}\n\n${o.summary}\n\n${o.action}: ${o.link}\n\n${footer}`;
   return { subject: o.subject, text, html };
+}
+
+export interface ReceiptFacts {
+  merchant: { name: string; support_url: string | null };
+  product: { name: string; rate_usd_per_second: string };
+  seconds_elapsed: number;
+  settled_usd: string;
+  refunded_usd: string;
+  started_at: number | null;
+  canceled_at: number | null;
+  ended_reason: "canceled" | "cap_reached" | null;
+}
+
+const when = (t: number | null) => (t === null ? "—" : new Date(t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC");
+
+/**
+ * The subscriber's receipt (checkout FR-CHK-008/029, API FR-API-123) on the shared shell: the
+ * headline in the subscriber's words, the figures as rows, a button to the account page. No fee,
+ * no chain words. The text part carries the same rows for clients that show no HTML.
+ */
+export function receiptMail(s: ReceiptFacts, o: { accountUrl: string; logoUrl: string }): Mail {
+  const paid = `$${s.settled_usd}`;
+  const headline = `You paid for ${s.seconds_elapsed} seconds · ${paid}`;
+  const why = s.ended_reason === "cap_reached" ? "The meter reached the limit you set and stopped on its own." : "You stopped the meter; unused time was returned to you.";
+  const rows: [string, string][] = [
+    ["Merchant", s.merchant.name],
+    ["Product", s.product.name],
+    ["Rate", `$${s.product.rate_usd_per_second} / second`],
+    ["Started", when(s.started_at)],
+    ["Stopped", when(s.canceled_at)],
+    ["Charged", paid],
+    ["Returned", `$${s.refunded_usd}`],
+  ];
+  const footer = s.merchant.support_url ? `Questions about this charge? ${s.merchant.name} can help: ${s.merchant.support_url}` : `Questions about this charge? Contact ${s.merchant.name}.`;
+  const html = shell({
+    title: `Your receipt from ${s.merchant.name}`,
+    heading: headline,
+    body: `Your receipt from ${s.merchant.name}.`,
+    rows,
+    after: why,
+    button: { label: "Manage your meters", href: o.accountUrl },
+    linkIntro: "If the button does not work, open this link:",
+    footer,
+    logoUrl: o.logoUrl,
+  });
+  const text = [
+    headline,
+    "",
+    ...rows.map(([k, v]) => `${k.padEnd(10)} ${v}`),
+    "",
+    why,
+    "",
+    `Manage your meters: ${o.accountUrl}`,
+    ...(s.merchant.support_url ? [`Help from ${s.merchant.name}: ${s.merchant.support_url}`] : []),
+  ].join("\n");
+  return { subject: `Your receipt from ${s.merchant.name} · ${paid}`, text, html };
 }

@@ -133,6 +133,15 @@ describe("FR-API-123 receipt email", () => {
     expect(mails[0]!.text).toContain("$13.52");
     expect(mails[0]!.text).toContain("GPU");
     expect(mails[0]!.text.toLowerCase()).not.toMatch(/fee|wallet|chain|tx|0x/);
+    // Every mail from Elapse is on the one shell (FR-API-100): logo, heading, rows, a button, the raw link.
+    const html = mails[0]!.html ?? "";
+    expect(html).toContain("/apple-icon.png");
+    expect(html).toContain("You paid for 220 seconds");
+    expect(html).toContain(">Returned<");
+    expect(html).toContain("$13.52");
+    expect(html).toContain(">Manage your meters<");
+    expect(html).toContain(`href="${config.checkoutBaseUrl}/account"`);
+    expect(html.toLowerCase()).not.toMatch(/fee|wallet|chain|0x[0-9a-f]{6}/);
     const again = await api("POST", `/v1/account/subscriptions/${subId}/receipt/email`, { body: {}, headers: await identity(subscriber.address, "sub@example.com") });
     expect(again.status).toBe(429);
     expect(mails).toHaveLength(1);

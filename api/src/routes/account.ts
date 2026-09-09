@@ -11,6 +11,7 @@ import { ACCOUNT_STATUSES, findAccountSubscription, listAccountSubscriptions, se
 import { findCheckoutSession } from "../db/checkout-sessions";
 import { ApiError, invalid } from "../lib/errors";
 import { sendEmail } from "../lib/email";
+import { receiptMail, type Mail } from "../lib/mail-templates";
 import { router } from "../lib/openapi";
 import { clientIp } from "../middleware/auth";
 import { cancelSubscription, prepareCancel, prepareRelay, submitRelay } from "../services/checkout";
@@ -175,30 +176,10 @@ for (const action of ["pause", "resume"] as const) {
   );
 }
 
-const fmt = (t: number | null) => (t === null ? "—" : new Date(t * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC");
-
 /** The receipt in the subscriber's words (checkout FR-CHK-008/029): seconds, paid, returned. No fee, no chain words. */
-export function receiptEmail(s: ReturnType<typeof serializeAccountSubscription>): { subject: string; text: string } {
-  const paid = `$${s.settled_usd}`;
-  return {
-    subject: `Your receipt from ${s.merchant.name} · ${paid}`,
-    text: [
-      `You paid for ${s.seconds_elapsed} seconds · ${paid}`,
-      "",
-      `Merchant   ${s.merchant.name}`,
-      `Product    ${s.product.name}`,
-      `Rate       $${s.product.rate_usd_per_second} / second`,
-      `Started    ${fmt(s.started_at)}`,
-      `Stopped    ${fmt(s.canceled_at)}`,
-      `Charged    ${paid}`,
-      `Returned   $${s.refunded_usd}`,
-      "",
-      s.ended_reason === "cap_reached" ? "The meter reached the limit you set and stopped on its own." : "You stopped the meter; unused time was returned to you.",
-      "",
-      `Manage your meters: ${config.checkoutBaseUrl}/account`,
-      ...(s.merchant.support_url ? [`Help from ${s.merchant.name}: ${s.merchant.support_url}`] : []),
-    ].join("\n"),
-  };
+export function receiptEmail(s: ReturnType<typeof serializeAccountSubscription>): Mail {
+  const origin = new URL(config.checkoutBaseUrl).origin;
+  return receiptMail(s, { accountUrl: `${config.checkoutBaseUrl}/account`, logoUrl: `${origin}/apple-icon.png` });
 }
 
 account.openapi(
@@ -229,7 +210,7 @@ account.openapi(
     if (!claimed) throw new ApiError(429, "rate_limit_error", "Already sent. Check your inbox.", undefined, "receipt_already_sent");
     const mail = receiptEmail(serializeAccountSubscription(sub, now));
     try {
-      await sendEmail({ to: who.email, subject: mail.subject, text: mail.text });
+      await sendEmail({ to: who.email, ...mail });
     } catch (e) {
       // Give the slot back so the next tap can try again; the provider's reason goes to the log, never the address.
       await sql`UPDATE subscriptions SET receipt_emailed_at = NULL WHERE id = ${sub.id}`;
