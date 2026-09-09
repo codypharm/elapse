@@ -10,7 +10,7 @@ import { SubscriptionDetail } from "./subscription-detail";
 import { SubscriptionsList } from "./subscriptions-list";
 import { MerchantProvider } from "./merchant-context";
 import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
-import type { Merchant } from "@/lib/dashboard/types";
+import type { Subscription, Merchant } from "@/lib/dashboard/types";
 
 let pathname = "/dashboard/subscriptions";
 vi.mock("next/navigation", () => ({
@@ -41,7 +41,7 @@ describe("Subscriptions", () => {
     const m = await signIn(api);
     mount(api, m, <SubscriptionsList />);
     const list = await screen.findByRole("list", { name: /subscriptions/i });
-    const active = (await api.listSubscriptions("test", { status: "active" }))[0]!;
+    const active = (await api.listSubscriptions("test", { status: "active" })).data[0]!;
     const row = within(list).getByText(active.id).closest("li")!;
     expect(row).toHaveTextContent(/active/i);
     expect(row).toHaveTextContent(active.product.name);
@@ -55,7 +55,7 @@ describe("Subscriptions", () => {
 
   it("shows the detail: panel readout, funded, settled, remaining, timeline, settlements (FR-DSH-041/042)", async () => {
     const m = await signIn(api);
-    const sub = (await api.listSubscriptions("test", { status: "active" })).find((s) => s.settledUsd !== "0.000")!;
+    const sub = (await api.listSubscriptions("test", { status: "active" })).data.find((s) => s.settledUsd !== "0.000")!;
     mount(api, m, <SubscriptionDetail subscriptionId={sub.id} />);
     expect(await screen.findByRole("timer")).toBeInTheDocument();
     expect(screen.getByText(/funded/i).closest("div")).toHaveTextContent(`$${sub.fundedUsd}`);
@@ -75,7 +75,7 @@ describe("Subscriptions", () => {
   it("cancels after a confirmation that states seconds and refund; status flips (FR-DSH-043, BR-DSH-008)", async () => {
     const user = userEvent.setup();
     const m = await signIn(api);
-    const sub = (await api.listSubscriptions("test", { status: "active" }))[0]!;
+    const sub = (await api.listSubscriptions("test", { status: "active" })).data[0]!;
     mount(api, m, <SubscriptionDetail subscriptionId={sub.id} />);
     await user.click(await screen.findByRole("button", { name: /cancel meter/i }));
     const dialog = await screen.findByRole("dialog");
@@ -93,9 +93,44 @@ describe("Subscriptions", () => {
     const user = userEvent.setup();
     const write = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue(undefined);
     const m = await signIn(api);
-    const sub = (await api.listSubscriptions("test", {}))[0]!;
+    const sub = (await api.listSubscriptions("test", {})).data[0]!;
     mount(api, m, <SubscriptionDetail subscriptionId={sub.id} />);
     await user.click(await screen.findByRole("button", { name: /copy subscription id/i }));
     expect(write).toHaveBeenCalledWith(sub.id);
+  });
+});
+
+describe("SubscriptionsList · FR-DSH-126 paging", () => {
+  let api: MockDashboardApi;
+  beforeEach(() => {
+    localStorage.clear();
+    resetMockDashboardApi();
+    api = createMockDashboardApi({ latencyMs: 0 });
+  });
+
+  it("shows 50 rows, loads the next page in place, and hides the button on the last page", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    const rows: Subscription[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `sub_big${120 - i}` as const, livemode: false, status: "active", product: { id: "prod_big", name: "Big" }, customer: { id: "cus_big", email: "big@x.test" },
+      rateUsdPerSecond: "0.004", startedAt: 1_757_000_000_000 - i * 60_000, pausedAt: null, canceledAt: null, fundedUsd: "14.4", settledUsd: "0", checkoutSession: "cs_big", createdAt: 1_757_000_000_000 - i * 60_000,
+    }));
+    const big: MockDashboardApi = {
+      ...api,
+      async listSubscriptions(_mode, filter) {
+        const limit = filter.limit ?? 50;
+        const start = filter.startingAfter ? rows.findIndex((r) => r.id === filter.startingAfter) + 1 : 0;
+        return { data: rows.slice(start, start + limit), hasMore: start + limit < rows.length };
+      },
+    };
+    mount(big, m, <SubscriptionsList />);
+    const list = await screen.findByRole("list", { name: /^subscriptions$/i });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(50));
+    expect(screen.getByText(/50 shown · more available/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /^subscriptions$/i })).getAllByRole("listitem")).toHaveLength(100));
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /^subscriptions$/i })).getAllByRole("listitem")).toHaveLength(120));
+    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
   });
 });

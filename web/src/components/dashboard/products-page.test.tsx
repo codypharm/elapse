@@ -10,7 +10,7 @@ import { ProductsPage } from "./products-page";
 import { MerchantProvider } from "./merchant-context";
 import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
 import { setMode } from "@/lib/dashboard/mode";
-import type { Merchant } from "@/lib/dashboard/types";
+import type { Merchant, Product } from "@/lib/dashboard/types";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/products",
@@ -113,5 +113,39 @@ describe("ProductsPage", () => {
     expect(dialog).toHaveTextContent(/running meters continue/i);
     await user.click(within(dialog).getByRole("button", { name: /^archive$/i }));
     await waitFor(() => expect(within(screen.getByRole("list", { name: /products/i })).queryByText("Live seat")).not.toBeInTheDocument());
+  });
+});
+
+describe("ProductsPage · FR-DSH-126 paging", () => {
+  let api: MockDashboardApi;
+  beforeEach(() => {
+    localStorage.clear();
+    resetMockDashboardApi();
+    api = createMockDashboardApi({ latencyMs: 0 });
+  });
+
+  it("shows 50 products, loads the next page in place, and hides the button on the last page", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    const rows: Product[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `prod_big${120 - i}` as const, livemode: false, name: `Big ${120 - i}`, description: null, rateUsdPerSecond: "0.004", allowPause: false, status: "active", activeSubscriptions: 0, createdAt: 1_757_000_000_000 - i * 60_000,
+    }));
+    const big: MockDashboardApi = {
+      ...api,
+      async listProducts(_mode, filter) {
+        const limit = filter.limit ?? 50;
+        const start = filter.startingAfter ? rows.findIndex((r) => r.id === filter.startingAfter) + 1 : 0;
+        return { data: rows.slice(start, start + limit), hasMore: start + limit < rows.length };
+      },
+    };
+    mount(big, m);
+    const list = await screen.findByRole("list", { name: /^products$/i });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(50));
+    expect(screen.getByText(/50 shown · more available/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /^products$/i })).getAllByRole("listitem")).toHaveLength(100));
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /^products$/i })).getAllByRole("listitem")).toHaveLength(120));
+    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
   });
 });

@@ -14,11 +14,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { timeAgo } from "@/lib/dashboard/format";
 import { useMode } from "@/lib/dashboard/mode";
 import { EVENT_TYPES, type Event, type EventType } from "@/lib/dashboard/types";
-import { usePoll } from "@/lib/dashboard/use-poll";
-import { useShowMore } from "@/lib/dashboard/use-show-more";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { cn } from "@/lib/utils";
 import { useMerchant } from "./merchant-context";
-import { ShowMore } from "./show-more";
+import { LoadMore } from "./load-more";
 
 const WORD: Record<Event["deliveryState"], string> = { pending: "Pending", delivered: "Delivered", failed: "Failed" };
 const PAGE = 50;
@@ -28,9 +27,11 @@ export function EventsList() {
   const mode = useMode();
   const pathname = usePathname();
   const [type, setType] = useState<EventType | "">("");
-  const fetcher = useCallback(() => api.listEvents(mode, type ? { type } : {}), [api, mode, type]);
-  const { data, loading, stale } = usePoll(fetcher);
-  const paged = useShowMore(data, PAGE);
+  // FR-DSH-126: pages by cursor; a type or mode change makes a new fetcher and resets to page one.
+  const fetchPage = useCallback((startingAfter?: string) => api.listEvents(mode, { ...(type ? { type } : {}), startingAfter, limit: PAGE }), [api, mode, type]);
+  const paged = usePagedList(fetchPage);
+  const { loading, stale } = paged;
+  const data = paged.loading ? null : paged.rows;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -69,7 +70,7 @@ export function EventsList() {
         </p>
       ) : (
         <ol aria-label="Events" className="mt-5 divide-y divide-border rounded-lg border border-border">
-          {paged.visible.map((e) => {
+          {paged.rows.map((e) => {
             const href = `/dashboard/developers/events/${e.id}`;
             const current = pathname === href;
             return (
@@ -106,7 +107,7 @@ export function EventsList() {
           })}
         </ol>
       )}
-      <ShowMore remaining={paged.remaining} onMore={paged.more} step={PAGE} />
+      <LoadMore shown={paged.rows.length} hasMore={paged.hasMore} loading={paged.loadingMore} onMore={() => void paged.more()} />
     </div>
   );
 }

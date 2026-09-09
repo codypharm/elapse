@@ -229,7 +229,7 @@ describe("SettingsPage", () => {
     await user.type(within(dialog).getByLabelText(/type nimbus/i), "Nimbus");
     expect(confirm).toBeEnabled();
     await user.click(confirm);
-    await waitFor(async () => expect(await api.listProducts("test", { includeArchived: true })).toHaveLength(0));
+    await waitFor(async () => expect((await api.listProducts("test", { includeArchived: true })).data).toHaveLength(0));
     expect(screen.getByRole("link", { name: /email us/i })).toHaveAttribute("href", expect.stringMatching(/^mailto:/));
   });
 });

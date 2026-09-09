@@ -10,7 +10,7 @@ import { EventDetail } from "./event-detail";
 import { EventsList } from "./events-list";
 import { MerchantProvider } from "./merchant-context";
 import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
-import type { Merchant } from "@/lib/dashboard/types";
+import type { Event, Merchant } from "@/lib/dashboard/types";
 
 const push = vi.fn();
 let pathname = "/dashboard/developers/events";
@@ -44,7 +44,7 @@ describe("Events", () => {
     const list = await screen.findByRole("list", { name: /^events$/i });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.length).toBeGreaterThan(5);
-    const first = (await api.listEvents("test", {}))[0]!;
+    const first = (await api.listEvents("test", {})).data[0]!;
     expect(rows[0]).toHaveTextContent(first.type);
     expect(rows[0]).toHaveTextContent(first.objectId);
     expect(rows[0]).toHaveTextContent(/delivered|pending|failed/i);
@@ -57,7 +57,7 @@ describe("Events", () => {
 
   it("marks the selected event in the list", async () => {
     const m = await signIn(api);
-    const first = (await api.listEvents("test", {}))[0]!;
+    const first = (await api.listEvents("test", {})).data[0]!;
     pathname = `/dashboard/developers/events/${first.id}`;
     mount(api, m, <EventsList />);
     const list = await screen.findByRole("list", { name: /^events$/i });
@@ -66,7 +66,7 @@ describe("Events", () => {
 
   it("shows the payload as JSON with copy, and the deliveries it produced (FR-DSH-091)", async () => {
     const m = await signIn(api);
-    const ev = (await api.listEvents("test", { type: "subscription.canceled" }))[0]!;
+    const ev = (await api.listEvents("test", { type: "subscription.canceled" })).data[0]!;
     mount(api, m, <EventDetail eventId={ev.id} />);
     expect(await screen.findByRole("heading", { name: ev.type })).toBeInTheDocument();
     const code = screen.getByTestId("event-payload");
@@ -83,5 +83,40 @@ describe("Events", () => {
     const m = await signIn(api);
     mount(api, m, <EventDetail eventId="evt_nope" />);
     expect(await screen.findByText(/can't find this event/i)).toBeInTheDocument();
+  });
+});
+
+describe("EventsList · FR-DSH-126 paging", () => {
+  let api: MockDashboardApi;
+  beforeEach(() => {
+    localStorage.clear();
+    resetMockDashboardApi();
+    api = createMockDashboardApi({ latencyMs: 0 });
+  });
+
+  it("shows 50 events, loads the next page in place, and hides the button on the last page", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    const rows: Event[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `evt_big${120 - i}` as const, livemode: false, type: "invoice.settled", objectId: "inv_big", createdAt: 1_757_000_000_000 - i * 60_000,
+      pendingWebhooks: 0, deliveryState: "delivered", payload: {},
+    }));
+    const big: MockDashboardApi = {
+      ...api,
+      async listEvents(_mode, filter) {
+        const limit = filter.limit ?? 50;
+        const start = filter.startingAfter ? rows.findIndex((r) => r.id === filter.startingAfter) + 1 : 0;
+        return { data: rows.slice(start, start + limit), hasMore: start + limit < rows.length };
+      },
+    };
+    mount(big, m, <EventsList />);
+    const list = await screen.findByRole("list", { name: /events/i });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(50));
+    expect(screen.getByText(/50 shown · more available/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /events/i })).getAllByRole("listitem")).toHaveLength(100));
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /events/i })).getAllByRole("listitem")).toHaveLength(120));
+    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
   });
 });

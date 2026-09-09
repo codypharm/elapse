@@ -408,8 +408,11 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
 
     // ── deliveries (FR-DSH-083..085) ──
     async listDeliveries(endpointId, filter) {
-      const q = filter?.status ? `?status=${filter.status === "pending" ? "queued" : filter.status}&limit=100` : "?limit=100";
-      return (await call<List<WireDelivery>>("GET", `/v1/webhook_endpoints/${endpointId}/deliveries${q}`)).data.map((d) => mapDelivery(d));
+      const q = new URLSearchParams({ limit: String(filter?.limit ?? 50) });
+      if (filter?.status) q.set("status", filter.status === "pending" ? "queued" : filter.status);
+      if (filter?.startingAfter) q.set("starting_after", filter.startingAfter);
+      const page = await call<List<WireDelivery>>("GET", `/v1/webhook_endpoints/${endpointId}/deliveries?${q}`);
+      return { data: page.data.map((d) => mapDelivery(d)), hasMore: page.has_more };
     },
     async getDelivery(id) {
       const d = await call<WireDelivery>("GET", `/v1/deliveries/${id}`);
@@ -429,11 +432,13 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
     // ── events (FR-DSH-090..092) ──
     async listEvents(mode, filter) {
       currentMode = mode;
-      const q = new URLSearchParams({ limit: "100" });
+      const q = new URLSearchParams({ limit: String(filter.limit ?? 50) });
+      if (filter.startingAfter) q.set("starting_after", filter.startingAfter);
       if (filter.type) q.set("type", filter.type);
       if (filter.since) q.set("since", String(Math.floor(filter.since / 1000)));
       if (filter.until) q.set("until", String(Math.floor(filter.until / 1000)));
-      return (await call<List<WireEvent>>("GET", `/v1/events?${q}`, { mode })).data.map(mapEvent);
+      const page = await call<List<WireEvent>>("GET", `/v1/events?${q}`, { mode });
+      return { data: page.data.map(mapEvent), hasMore: page.has_more };
     },
     async getEvent(id) {
       const ev = await call<WireEvent>("GET", `/v1/events/${id}`);
@@ -445,8 +450,12 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
     // ── products (FR-DSH-030..033) ──
     async listProducts(mode, filter) {
       currentMode = mode;
-      const rows = (await call<List<WireProduct>>("GET", "/v1/products?limit=100", { mode })).data.map(mapProduct);
-      return filter.includeArchived ? rows : rows.filter((p) => p.status === "active");
+      // FR-DSH-126: the archived filter runs on the server (FR-API-011 amended 2026-09-09) so it holds across pages.
+      const q = new URLSearchParams({ limit: String(filter.limit ?? 50) });
+      if (!filter.includeArchived) q.set("active", "true");
+      if (filter.startingAfter) q.set("starting_after", filter.startingAfter);
+      const page = await call<List<WireProduct>>("GET", `/v1/products?${q}`, { mode });
+      return { data: page.data.map(mapProduct), hasMore: page.has_more };
     },
     async createProduct(mode, input, opts) {
       return mapProduct(await call<WireProduct>("POST", "/v1/products", { mode, body: { name: input.name, rate_usd_per_second: input.rateUsdPerSecond, ...(input.description ? { description: input.description } : {}), allow_pause: input.allowPause }, idempotencyKey: idem(opts) }));
@@ -471,11 +480,13 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
     // ── subscriptions (FR-DSH-040..044) ──
     async listSubscriptions(mode, filter) {
       currentMode = mode;
-      const q = new URLSearchParams({ limit: "100" });
+      const q = new URLSearchParams({ limit: String(filter.limit ?? 50) });
+      if (filter.startingAfter) q.set("starting_after", filter.startingAfter);
       if (filter.status) q.set("status", filter.status);
       if (filter.product) q.set("product", filter.product);
       if (filter.customer) q.set("customer", filter.customer);
-      return (await call<List<WireSubscription>>("GET", `/v1/subscriptions?${q}`, { mode })).data.map(mapSubscription);
+      const page = await call<List<WireSubscription>>("GET", `/v1/subscriptions?${q}`, { mode });
+      return { data: page.data.map(mapSubscription), hasMore: page.has_more };
     },
     async getSubscription(id) {
       const w = await call<WireSubscription>("GET", `/v1/subscriptions/${id}`);
@@ -501,9 +512,11 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
     // ── customers (FR-DSH-050/051) ──
     async listCustomers(mode, filter) {
       currentMode = mode;
-      const q = new URLSearchParams({ limit: "100" });
+      const q = new URLSearchParams({ limit: String(filter.limit ?? 50) });
+      if (filter.startingAfter) q.set("starting_after", filter.startingAfter);
       if (filter.search) q.set("search", filter.search);
-      return (await call<List<WireCustomer>>("GET", `/v1/customers?${q}`, { mode })).data.map(mapCustomer);
+      const page = await call<List<WireCustomer>>("GET", `/v1/customers?${q}`, { mode });
+      return { data: page.data.map(mapCustomer), hasMore: page.has_more };
     },
     async getCustomer(id) {
       const [w, subs, events] = await Promise.all([
@@ -517,22 +530,26 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
     },
     async listInvoices(mode, filter) {
       currentMode = mode;
-      const q = new URLSearchParams({ limit: "100" });
+      // FR-DSH-126: filters run on the server (FR-API-052 amended 2026-09-09) so they hold across pages.
+      const q = new URLSearchParams({ limit: String(filter.limit ?? 50), status: "paid" });
+      if (filter.startingAfter) q.set("starting_after", filter.startingAfter);
       if (filter.subscription) q.set("subscription", filter.subscription);
-      const rows = (await call<List<WireInvoice>>("GET", `/v1/invoices?${q}`, { mode })).data.filter((i) => i.status === "paid");
-      const since = filter.since ? Math.floor(filter.since / 1000) : null;
-      const until = filter.until ? Math.floor(filter.until / 1000) : null;
-      return rows.filter((i) => (since === null || i.period_end >= since) && (until === null || i.period_end <= until)).map((i) => mapInvoice(i));
+      if (filter.since) q.set("since", String(Math.floor(filter.since / 1000)));
+      if (filter.until) q.set("until", String(Math.floor(filter.until / 1000)));
+      const page = await call<List<WireInvoice>>("GET", `/v1/invoices?${q}`, { mode });
+      return { data: page.data.map((i) => mapInvoice(i)), hasMore: page.has_more };
     },
     // ── balance & payouts (FR-DSH-120..124) ──
     async listLedger(mode, filter) {
       currentMode = mode;
-      const q = new URLSearchParams({ limit: "500" });
+      const q = new URLSearchParams({ limit: String(filter.limit ?? 50) });
+      if (filter.startingAfter) q.set("starting_after", filter.startingAfter);
       if (filter.kind) q.set("kind", filter.kind);
       if (filter.subscription) q.set("subscription", filter.subscription);
       if (filter.since) q.set("from", String(Math.floor(filter.since / 1000)));
       if (filter.until) q.set("to", String(Math.floor(filter.until / 1000)));
-      return (await call<{ data: WireLedger[] }>("GET", `/v1/dashboard/ledger?${q}`, { mode })).data.map(mapLedger);
+      const page = await call<List<WireLedger>>("GET", `/v1/dashboard/ledger?${q}`, { mode });
+      return { data: page.data.map(mapLedger), hasMore: page.has_more };
     },
     async getBalance(mode) {
       currentMode = mode;

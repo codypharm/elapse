@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BalancePage, ledgerCsv } from "./balance-page";
 import { MerchantProvider } from "./merchant-context";
 import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
-import type { Merchant } from "@/lib/dashboard/types";
+import type { LedgerEntry, Merchant } from "@/lib/dashboard/types";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/balance",
@@ -73,7 +73,7 @@ describe("Balance & payouts", () => {
     const list = await screen.findByRole("list", { name: /ledger/i });
     const rows = within(list).getAllByRole("listitem");
     expect(rows.length).toBeGreaterThan(10);
-    const all = await api.listLedger("test", {});
+    const all = (await api.listLedger("test", { limit: 100 })).data;
     const feeRow = all.find((l) => l.kind === "fee")!;
     const li = within(list).getByText(feeRow.id).closest("li")!;
     expect(li).toHaveTextContent(/^.*Fee.*$/);
@@ -96,7 +96,53 @@ describe("Balance & payouts", () => {
     expect(totals).toHaveTextContent(/settlements/i);
     expect(totals).toHaveTextContent(/fees/i);
     expect(totals).toHaveTextContent(/refunds/i);
-    const csv = ledgerCsv((await api.listLedger("test", {})).slice(0, 1));
+    const csv = ledgerCsv((await api.listLedger("test", {})).data.slice(0, 1));
     expect(csv.split("\n")[0]).toBe("block_time,entry,kind,amount_usd,subscription,customer,tx,invoice,reversed_by");
+  });
+});
+
+describe("Balance & payouts · FR-DSH-126 paging", () => {
+  let api: MockDashboardApi;
+  beforeEach(() => {
+    localStorage.clear();
+    resetMockDashboardApi();
+    api = createMockDashboardApi({ latencyMs: 0 });
+  });
+
+  /** 120 synthetic rows, newest first, served by the mock's cursor. */
+  function bigLedger(base: MockDashboardApi): MockDashboardApi {
+    const rows: LedgerEntry[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `led_big${120 - i}` as const, livemode: false, kind: "settlement", amountUsd: "0.01", subscription: "sub_big", customer: { id: "cus_big", email: "big@x.test" },
+      txId: "0x" + "ab".repeat(32), blockTime: 1_757_000_000_000 - i * 60_000, reversedBy: null, invoice: null,
+    }));
+    return {
+      ...base,
+      async listLedger(_mode, filter) {
+        const limit = filter.limit ?? 50;
+        const start = filter.startingAfter ? rows.findIndex((r) => r.id === filter.startingAfter) + 1 : 0;
+        return { data: rows.slice(start, start + limit), hasMore: start + limit < rows.length };
+      },
+    };
+  }
+
+  it("shows 50, loads 50 more in place, hides the button on the last page, and labels totals and export as partial", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    const big = bigLedger(api);
+    mount(big, m);
+    const list = await screen.findByRole("list", { name: /ledger/i });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(50));
+    expect(screen.getByText(/50 shown · more available/)).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /totals/i })).toHaveTextContent(/of 50 shown/i);
+    expect(screen.getByRole("button", { name: /export csv/i })).toHaveTextContent(/50 rows/i);
+
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /ledger/i })).getAllByRole("listitem")).toHaveLength(100));
+    expect(screen.getByText(/100 shown · more available/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /ledger/i })).getAllByRole("listitem")).toHaveLength(120));
+    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
+    expect(screen.getByRole("region", { name: /totals/i })).not.toHaveTextContent(/shown/i);
   });
 });

@@ -24,14 +24,14 @@ import { newIdempotencyKey } from "@/lib/dashboard/idempotency";
 import { DashboardApiError } from "@/lib/dashboard/mock-api";
 import type { Delivery, EventType, WebhookEndpoint } from "@/lib/dashboard/types";
 import { usePoll } from "@/lib/dashboard/use-poll";
-import { useShowMore } from "@/lib/dashboard/use-show-more";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { DeliveryDrawer } from "./delivery-drawer";
 import { DELIVERY_TONE, deliveryWord } from "./delivery-status";
 import { EndpointFormDialog, RollSecretDialog, TestEventDialog, type EndpointForm } from "./endpoint-dialogs";
 import { useMerchant } from "./merchant-context";
 import { Page, PageHeader } from "./page-header";
 import { SecretRevealDialog } from "./secret-reveal-dialog";
-import { ShowMore } from "./show-more";
+import { LoadMore } from "./load-more";
 import { StatusChip } from "./status-chip";
 import { eventsWord } from "./webhooks-page";
 
@@ -41,14 +41,24 @@ const PAGE = 50;
 export function EndpointDetail({ endpointId }: { endpointId: string }) {
   const { api } = useMerchant();
   const [filter, setFilter] = useState<Delivery["status"] | "">("");
-  const fetcher = useCallback(async () => {
+  const endpointFetcher = useCallback(async () => {
     const endpoint = (await api.listEndpoints("test")).concat(await api.listEndpoints("live")).find((e) => e.id === endpointId);
     if (!endpoint) throw new DashboardApiError("not_found", "No such endpoint");
-    const deliveries = await api.listDeliveries(endpointId, filter ? { status: filter } : undefined);
-    return { endpoint, deliveries };
-  }, [api, endpointId, filter]);
-  const { data, loading, stale, error, reload } = usePoll(fetcher);
-  const paged = useShowMore(data?.deliveries, PAGE);
+    return endpoint;
+  }, [api, endpointId]);
+  const endpointPoll = usePoll(endpointFetcher);
+  // FR-DSH-126: deliveries page by cursor; a status filter change makes a new fetcher and resets to page one.
+  const fetchPage = useCallback((startingAfter?: string) => api.listDeliveries(endpointId, { ...(filter ? { status: filter } : {}), startingAfter, limit: PAGE }), [api, endpointId, filter]);
+  const paged = usePagedList(fetchPage);
+  const loading = endpointPoll.loading || paged.loading;
+  const stale = endpointPoll.stale || paged.stale;
+  const error = endpointPoll.error;
+  const data = endpointPoll.data && !paged.loading ? { endpoint: endpointPoll.data, deliveries: paged.rows } : null;
+  const reloadEndpoint = endpointPoll.reload;
+  const reloadDeliveries = paged.reload;
+  const reload = useCallback(async () => {
+    await Promise.all([reloadEndpoint(), reloadDeliveries()]);
+  }, [reloadEndpoint, reloadDeliveries]);
 
   const [open, setOpen] = useState<Delivery | null>(null);
   const [editing, setEditing] = useState(false);
@@ -224,7 +234,7 @@ export function EndpointDetail({ endpointId }: { endpointId: string }) {
               <span className="placard">Code</span>
               <span className="placard text-right">When</span>
             </li>
-            {paged.visible.map((d) => (
+            {paged.rows.map((d) => (
               <li key={d.id}>
                 <button
                   type="button"
@@ -252,7 +262,7 @@ export function EndpointDetail({ endpointId }: { endpointId: string }) {
             ))}
           </ol>
         )}
-        <ShowMore remaining={paged.remaining} onMore={paged.more} step={PAGE} />
+        <LoadMore shown={paged.rows.length} hasMore={paged.hasMore} loading={paged.loadingMore} onMore={() => void paged.more()} />
       </section>
 
       <DeliveryDrawer delivery={open} onClose={() => setOpen(null)} onResend={resend} busy={busy} />

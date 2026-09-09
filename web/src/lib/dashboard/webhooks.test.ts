@@ -59,17 +59,17 @@ describe("mock dashboard api — webhooks", () => {
 
   it("sends a test event that shows up as a delivery for that endpoint (FR-DSH-082)", async () => {
     const ep = (await api.listEndpoints("test")).find((e) => !e.disabled);
-    const before = (await api.listDeliveries(ep!.id)).length;
+    const before = (await api.listDeliveries(ep!.id, { limit: 1000 })).data.length;
     const { event } = await api.sendTestEvent(ep!.id, "subscription.canceled");
     expect(event.type).toBe("subscription.canceled");
-    const after = await api.listDeliveries(ep!.id);
+    const after = (await api.listDeliveries(ep!.id, { limit: 1000 })).data;
     expect(after.length).toBe(before + 1);
     expect(after[0]!.event.id).toBe(event.id);
   });
 
   it("lists deliveries with attempts, status words, and a signature header (FR-DSH-083/084)", async () => {
     const ep = (await api.listEndpoints("test")).find((e) => !e.disabled);
-    const deliveries = await api.listDeliveries(ep!.id);
+    const deliveries = (await api.listDeliveries(ep!.id)).data;
     expect(deliveries.length).toBeGreaterThan(0);
     const statuses = new Set(deliveries.map((d) => d.status));
     expect([...statuses].every((s) => ["pending", "succeeded", "failed", "exhausted", "skipped"].includes(s))).toBe(true);
@@ -82,7 +82,7 @@ describe("mock dashboard api — webhooks", () => {
 
   it("resend adds a manual attempt without resetting the schedule (FR-DSH-084)", async () => {
     const ep = (await api.listEndpoints("test")).find((e) => !e.disabled);
-    const row = (await api.listDeliveries(ep!.id)).find((d) => d.status === "exhausted")!;
+    const row = (await api.listDeliveries(ep!.id, { status: "exhausted" })).data[0]!;
     expect(row).toBeDefined();
     expect(row.attempts).toHaveLength(1); // a list row is a summary: last attempt only, like the API
     const exhausted = await api.getDelivery(row.id);
@@ -96,9 +96,9 @@ describe("mock dashboard api — webhooks", () => {
   });
 
   it("lists events with pending counts and a payload; filters by type (FR-DSH-090/091)", async () => {
-    const all = await api.listEvents("test", {});
+    const all = (await api.listEvents("test", {})).data;
     expect(all.length).toBeGreaterThan(10);
-    const settled = await api.listEvents("test", { type: "invoice.settled" });
+    const settled = (await api.listEvents("test", { type: "invoice.settled" })).data;
     expect(settled.every((e) => e.type === "invoice.settled")).toBe(true);
     const one = await api.getEvent(all[0]!.id);
     expect(one.event.payload).toHaveProperty("type");

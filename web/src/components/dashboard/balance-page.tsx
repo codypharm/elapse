@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/site/copy-button";
 import { EXPLORER, txUrl } from "@/lib/dashboard/chain";
 import { shortHex, when } from "@/lib/dashboard/format";
-import { useShowMore } from "@/lib/dashboard/use-show-more";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { useMode } from "@/lib/dashboard/mode";
 import type { LedgerEntry, LedgerKind } from "@/lib/dashboard/types";
 import { usePoll } from "@/lib/dashboard/use-poll";
@@ -30,7 +30,7 @@ import { links } from "@/lib/site";
 import { cn } from "@/lib/utils";
 import { useMerchant } from "./merchant-context";
 import { Page, PageHeader } from "./page-header";
-import { ShowMore } from "./show-more";
+import { LoadMore } from "./load-more";
 import { StatusChip } from "./status-chip";
 
 const usd = (v: string) => parseRate(v.replace(/,/g, ""));
@@ -66,19 +66,25 @@ export function BalancePage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [withdraw, setWithdraw] = useState(false);
-  const fetcher = useCallback(
-    async () => ({
-      balance: await api.getBalance(mode),
-      ledger: await api.listLedger(mode, {
+  const balanceFetcher = useCallback(() => api.getBalance(mode), [api, mode]);
+  const { data: balance, loading: balanceLoading, stale } = usePoll(balanceFetcher);
+  // FR-DSH-126: the ledger pages by cursor; filters make a new fetcher, which resets to page one.
+  const fetchPage = useCallback(
+    (startingAfter?: string) =>
+      api.listLedger(mode, {
         kind: kind || undefined,
         since: from ? new Date(from).getTime() : undefined,
         until: to ? new Date(to).getTime() + 86_399_999 : undefined,
+        startingAfter,
+        limit: PAGE,
       }),
-    }),
     [api, mode, kind, from, to],
   );
-  const { data, loading, stale } = usePoll(fetcher);
-  const paged = useShowMore(data?.ledger, PAGE);
+  const ledger = usePagedList(fetchPage);
+  const loading = balanceLoading || ledger.loading;
+  const data = balance && !ledger.loading ? { balance, ledger: ledger.rows } : null;
+  /** While more pages exist, totals and the export cover only what is loaded (FR-DSH-126). */
+  const partial = ledger.hasMore ? ` of ${ledger.rows.length} shown` : "";
   const input = "numerals h-9 rounded-lg border border-input bg-transparent px-2.5 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
   const totals = data
@@ -158,9 +164,9 @@ export function BalancePage() {
               To
               <input type="date" aria-label="To date" value={to} onChange={(e) => setTo(e.target.value)} className={input} />
             </label>
-            <Button variant="outline" disabled={!data || data.ledger.length === 0} onClick={() => data && download(`elapse-ledger-${mode}.csv`, ledgerCsv(data.ledger))} className="h-9">
+            <Button variant="outline" disabled={!data || data.ledger.length === 0} onClick={() => data && download(`elapse-ledger-${mode}.csv`, ledgerCsv(data.ledger))} className="h-9" aria-label={`Export CSV${partial ? `, ${data?.ledger.length ?? 0} rows shown` : ""}`}>
               <Download data-icon="inline-start" className="size-4" />
-              CSV
+              CSV{partial ? <span className="numerals ml-1 text-ink-soft">· {data?.ledger.length ?? 0} rows</span> : null}
             </Button>
           </div>
         </div>
@@ -172,7 +178,10 @@ export function BalancePage() {
             <section aria-label="Totals" className="mt-4 grid grid-cols-2 divide-x divide-y divide-border overflow-hidden rounded-lg border border-border md:grid-cols-4 md:divide-y-0">
               {totals.map((t) => (
                 <div key={t.value} className="flex min-w-0 flex-col-reverse justify-end gap-1 px-4 py-3">
-                  <dt className="placard">{t.plural}</dt>
+                  <dt className="placard">
+                    {t.plural}
+                    {partial ? <span className="ml-1 normal-case tracking-normal text-ink-soft">{partial}</span> : null}
+                  </dt>
                   <dd className="numerals text-[15px]">
                     {t.sign}
                     {formatUsd(t.total, 3)}
@@ -191,7 +200,7 @@ export function BalancePage() {
                   <span className="placard text-right">Amount</span>
                   <span className="placard text-right">Transaction</span>
                 </li>
-                {paged.visible.map((l) => {
+                {data.ledger.map((l) => {
                   const k = KINDS.find((x) => x.value === l.kind)!;
                   return (
                     <li key={l.id} className={cn("grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 px-4 py-3 text-[13px] md:grid-cols-[9rem_8.5rem_minmax(0,1fr)_7rem_7rem] md:items-center", l.reversedBy && "text-ink-soft")}>
@@ -219,7 +228,7 @@ export function BalancePage() {
                 })}
               </ol>
             )}
-            <ShowMore remaining={paged.remaining} onMore={paged.more} step={PAGE} />
+            <LoadMore shown={ledger.rows.length} hasMore={ledger.hasMore} loading={ledger.loadingMore} onMore={() => void ledger.more()} />
           </>
         )}
       </section>

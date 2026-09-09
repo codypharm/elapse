@@ -14,14 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { txUrl } from "@/lib/dashboard/chain";
 import { shortHex, when } from "@/lib/dashboard/format";
-import { useShowMore } from "@/lib/dashboard/use-show-more";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { useMode } from "@/lib/dashboard/mode";
 import type { Invoice } from "@/lib/dashboard/types";
-import { usePoll } from "@/lib/dashboard/use-poll";
 import { formatUsd, parseRate } from "@/lib/meter/math";
 import { useMerchant } from "./merchant-context";
 import { Page, PageHeader } from "./page-header";
-import { ShowMore } from "./show-more";
+import { LoadMore } from "./load-more";
 
 const usd = (v: string) => parseRate(v.replace(/,/g, ""));
 const PAGE = 50;
@@ -51,17 +50,23 @@ export function InvoicesPage() {
   const [subscription, setSubscription] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const fetcher = useCallback(
-    () =>
+  // FR-DSH-126: pages by cursor; a filter change makes a new fetcher and resets to page one.
+  const fetchPage = useCallback(
+    (startingAfter?: string) =>
       api.listInvoices(mode, {
         subscription: subscription.trim() || undefined,
         since: from ? new Date(from).getTime() : undefined,
         until: to ? new Date(to).getTime() + 86_399_999 : undefined,
+        startingAfter,
+        limit: PAGE,
       }),
     [api, mode, subscription, from, to],
   );
-  const { data, loading, stale } = usePoll(fetcher);
-  const paged = useShowMore(data, PAGE);
+  const paged = usePagedList(fetchPage);
+  const { loading, stale } = paged;
+  const data = paged.loading ? null : paged.rows;
+  /** While more pages exist, the totals row and the export cover only what is loaded (FR-DSH-126). */
+  const partial = paged.hasMore ? ` of ${paged.rows.length} shown` : "";
 
   const totals = data
     ? data.reduce(
@@ -91,7 +96,7 @@ export function InvoicesPage() {
         actions={
           <Button variant="outline" disabled={!data || data.length === 0} onClick={() => data && download(`elapse-invoices-${mode}.csv`, invoicesCsv(data))} className="h-9">
             <Download data-icon="inline-start" className="size-4" />
-            Export CSV
+            Export CSV{partial ? <span className="numerals ml-1 text-ink-soft">· {data?.length ?? 0} rows</span> : null}
           </Button>
         }
       />
@@ -128,7 +133,7 @@ export function InvoicesPage() {
               <span className="placard text-right">Net</span>
               <span className="placard text-right">Settlement</span>
             </li>
-            {paged.visible.map((i) => (
+            {paged.rows.map((i) => (
               <li key={i.id} className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-x-3 gap-y-1.5 px-4 py-3 text-[13px] md:grid-cols-[9rem_minmax(0,1fr)_5rem_6rem_6rem_6rem_7rem] md:items-center md:gap-3">
                 <span className="numerals col-span-2 text-ink-soft md:col-auto">{when(i.settledAt)}</span>
                 <span className="numerals col-span-2 min-w-0 truncate md:col-auto">
@@ -158,7 +163,10 @@ export function InvoicesPage() {
             ))}
           </ol>
           <div role="row" aria-label="Totals" className="mt-2 grid grid-cols-2 gap-2 rounded-lg border border-border bg-muted/40 px-4 py-3 text-[13px] md:grid-cols-[9rem_minmax(0,1fr)_5rem_6rem_6rem_6rem_7rem] md:gap-3">
-            <span className="placard self-center">Totals</span>
+            <span className="placard self-center">
+              Totals
+              {partial ? <span className="ml-1 normal-case tracking-normal text-ink-soft">{partial}</span> : null}
+            </span>
             <span className="text-ink-soft md:col-auto">
               <span className="numerals">{data.length}</span> {data.length === 1 ? "settlement" : "settlements"}
             </span>
@@ -179,7 +187,7 @@ export function InvoicesPage() {
             </span>
             <span />
           </div>
-          <ShowMore remaining={paged.remaining} onMore={paged.more} step={PAGE} />
+          <LoadMore shown={paged.rows.length} hasMore={paged.hasMore} loading={paged.loadingMore} onMore={() => void paged.more()} />
         </>
       )}
     </Page>

@@ -16,8 +16,8 @@ describe("mock dashboard api — products", () => {
   });
 
   it("lists products with rate and active subscription counts (FR-DSH-030)", async () => {
-    const all = await api.listProducts("test", { includeArchived: true });
-    const active = await api.listProducts("test", {});
+    const all = (await api.listProducts("test", { includeArchived: true })).data;
+    const active = (await api.listProducts("test", {})).data;
     expect(all.length).toBeGreaterThan(active.length);
     expect(active.every((p) => p.status === "active")).toBe(true);
     const gpu = all.find((p) => p.name === "GPU · 4090")!;
@@ -51,7 +51,7 @@ describe("mock dashboard api — products", () => {
   });
 
   it("creates a checkout link for a product in the product's mode (FR-DSH-032)", async () => {
-    const [p] = await api.listProducts("test", {});
+    const [p] = (await api.listProducts("test", {})).data;
     const link = await api.createCheckoutLink(p!.id, { idempotencyKey: "cl1" });
     expect(link.id).toMatch(/^cs_/);
     expect(link.url).toMatch(new RegExp(`/c/${link.id}$`));

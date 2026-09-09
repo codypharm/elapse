@@ -114,10 +114,15 @@ describe("real DashboardApi", () => {
   it("products map, archive by status, and checkout links return to the dashboard", async () => {
     const w = { id: "prod_1", name: "GPU", description: null, rate_usd_per_second: "0.004", allow_pause: false, active: false, livemode: false, created: T0, active_subscriptions: 3 };
     expect(mapProduct(w)).toMatchObject({ status: "archived", activeSubscriptions: 3, rateUsdPerSecond: "0.004" });
-    responses = [{ object: "list", data: [w, { ...w, id: "prod_2", active: true }] }];
-    expect((await api().listProducts("test", {})).map((p) => p.id)).toEqual(["prod_2"]);
-    responses = [{ object: "list", data: [w, { ...w, id: "prod_2", active: true }] }];
-    expect((await api().listProducts("test", { includeArchived: true })).length).toBe(2);
+    // FR-DSH-126: the archived filter is the server's `active=true` (FR-API-011 amended 2026-09-09), 50 a page.
+    responses = [{ object: "list", data: [{ ...w, id: "prod_2", active: true }], has_more: false }];
+    expect((await api().listProducts("test", {})).data.map((p) => p.id)).toEqual(["prod_2"]);
+    expect(calls[calls.length - 1]!.url).toContain("/v1/products?limit=50&active=true");
+    responses = [{ object: "list", data: [w, { ...w, id: "prod_2", active: true }], has_more: true }];
+    const both = await api().listProducts("test", { includeArchived: true });
+    expect(both.data.length).toBe(2);
+    expect(both.hasMore).toBe(true);
+    expect(calls[calls.length - 1]!.url).not.toContain("active=");
     responses = [{ ...w, active: true }];
     await api().updateProduct("prod_1", { status: "active" });
     expect(calls.at(-1)).toMatchObject({ url: `${BASE}/v1/products/prod_1`, body: { active: true } });

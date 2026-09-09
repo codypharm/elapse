@@ -15,11 +15,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useMode } from "@/lib/dashboard/mode";
 import type { Subscription } from "@/lib/dashboard/types";
 import { usePoll } from "@/lib/dashboard/use-poll";
-import { useShowMore } from "@/lib/dashboard/use-show-more";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { cn } from "@/lib/utils";
 import { LiveAmount } from "./live-amount";
 import { useMerchant } from "./merchant-context";
-import { ShowMore } from "./show-more";
+import { LoadMore } from "./load-more";
 import { StatusChip, type ChipTone } from "./status-chip";
 
 export const SUB_TONE: Record<Subscription["status"], ChipTone> = { incomplete: "muted", active: "live", paused: "caution", canceled: "muted" };
@@ -33,15 +33,18 @@ export function SubscriptionsList() {
   const pathname = usePathname();
   const [status, setStatus] = useState<Subscription["status"] | "">("");
   const [product, setProduct] = useState("");
-  const fetcher = useCallback(
-    async () => ({
-      subscriptions: await api.listSubscriptions(mode, { status: status || undefined, product: product || undefined }),
-      products: await api.listProducts(mode, { includeArchived: true }),
-    }),
+  // The filter dropdown lists every product; a merchant has few, so one wide page (FR-API-080 max).
+  const productsFetcher = useCallback(async () => (await api.listProducts(mode, { includeArchived: true, limit: 100 })).data, [api, mode]);
+  const products = usePoll(productsFetcher);
+  // FR-DSH-126: subscriptions page by cursor; a filter or mode change makes a new fetcher and resets to page one.
+  const fetchPage = useCallback(
+    (startingAfter?: string) => api.listSubscriptions(mode, { status: status || undefined, product: product || undefined, startingAfter, limit: PAGE }),
     [api, mode, status, product],
   );
-  const { data, loading, stale } = usePoll(fetcher);
-  const paged = useShowMore(data?.subscriptions, PAGE);
+  const paged = usePagedList(fetchPage);
+  const loading = products.loading || paged.loading;
+  const stale = products.stale || paged.stale;
+  const data = products.data && !paged.loading ? { subscriptions: paged.rows, products: products.data } : null;
 
   const select = "h-9 max-w-[11rem] rounded-lg border border-input bg-transparent px-2.5 text-[13px] text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
 
@@ -81,7 +84,7 @@ export function SubscriptionsList() {
         </p>
       ) : (
         <ol aria-label="Subscriptions" className="mt-5 divide-y divide-border rounded-lg border border-border">
-          {paged.visible.map((s) => {
+          {paged.rows.map((s) => {
             const href = `/dashboard/subscriptions/${s.id}`;
             const current = pathname === href;
             return (
@@ -114,7 +117,7 @@ export function SubscriptionsList() {
           })}
         </ol>
       )}
-      <ShowMore remaining={paged.remaining} onMore={paged.more} step={PAGE} />
+      <LoadMore shown={paged.rows.length} hasMore={paged.hasMore} loading={paged.loadingMore} onMore={() => void paged.more()} />
     </div>
   );
 }

@@ -13,7 +13,7 @@ import { WebhooksPage } from "./webhooks-page";
 import { EndpointDetail } from "./endpoint-detail";
 import { MerchantProvider } from "./merchant-context";
 import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "@/lib/dashboard/mock-api";
-import type { Merchant } from "@/lib/dashboard/types";
+import type { Delivery, Merchant } from "@/lib/dashboard/types";
 
 const push = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -97,11 +97,11 @@ describe("EndpointDetail", () => {
     const ep = await enabledEndpoint();
     mount(api, m, <EndpointDetail endpointId={ep.id} />);
     const log = await screen.findByRole("list", { name: /deliveries/i });
-    const all = await api.listDeliveries(ep.id);
+    const all = (await api.listDeliveries(ep.id)).data;
     expect(within(log).getAllByRole("listitem").length).toBe(Math.min(all.length, 50));
     await user.selectOptions(screen.getByLabelText(/filter by status/i), "exhausted");
     // The list carries a summary; the drawer must fetch and show every attempt (found 2026-09-06).
-    const exhausted = await api.getDelivery((await api.listDeliveries(ep.id, { status: "exhausted" }))[0]!.id);
+    const exhausted = await api.getDelivery((await api.listDeliveries(ep.id, { status: "exhausted" })).data[0]!.id);
     const row = (await screen.findByText(exhausted.event.id)).closest("li")!;
     expect(row).toHaveTextContent(/exhausted/i);
     expect(row).toHaveTextContent(`8 / 8`);
@@ -119,7 +119,7 @@ describe("EndpointDetail", () => {
     await screen.findByRole("list", { name: /deliveries/i });
     await user.selectOptions(screen.getByLabelText(/filter by status/i), "exhausted");
     // The list carries a summary; the drawer must fetch and show every attempt (found 2026-09-06).
-    const exhausted = await api.getDelivery((await api.listDeliveries(ep.id, { status: "exhausted" }))[0]!.id);
+    const exhausted = await api.getDelivery((await api.listDeliveries(ep.id, { status: "exhausted" })).data[0]!.id);
     const log = screen.getByRole("list", { name: /deliveries/i });
     await user.click(await within(log).findByText(exhausted.event.id));
     const drawer = await screen.findByRole("dialog");
@@ -143,7 +143,7 @@ describe("EndpointDetail", () => {
     await api.updateEndpoint(ep.id, { disabled: true });
     mount(api, m, <EndpointDetail endpointId={ep.id} />);
     const log = await screen.findByRole("list", { name: /deliveries/i });
-    const first = (await api.listDeliveries(ep.id))[0]!;
+    const first = (await api.listDeliveries(ep.id)).data[0]!;
     await user.click(await within(log).findByText(first.event.id));
     const drawer = await screen.findByRole("dialog");
     expect(within(drawer).getByRole("button", { name: /^resend$/i })).toBeDisabled();
@@ -156,12 +156,12 @@ describe("EndpointDetail", () => {
     const m = await signIn(api);
     const ep = await enabledEndpoint();
     mount(api, m, <EndpointDetail endpointId={ep.id} />);
-    const before = (await api.listDeliveries(ep.id)).length;
+    const before = (await api.listDeliveries(ep.id, { limit: 1000 })).data.length;
     await user.click(await screen.findByRole("button", { name: /send test event/i }));
     const dialog = await screen.findByRole("dialog");
     await user.selectOptions(within(dialog).getByLabelText(/event type/i), "subscription.canceled");
     await user.click(within(dialog).getByRole("button", { name: /^send$/i }));
-    await waitFor(async () => expect((await api.listDeliveries(ep.id)).length).toBe(before + 1));
+    await waitFor(async () => expect((await api.listDeliveries(ep.id, { limit: 1000 })).data.length).toBe(before + 1));
   });
 
   it("disables with a notice and rolls the secret with a grace period (FR-DSH-082/085)", async () => {
@@ -177,5 +177,43 @@ describe("EndpointDetail", () => {
     await user.click(within(dialog).getByRole("button", { name: /roll secret/i }));
     const reveal = await screen.findByRole("dialog");
     expect(within(reveal).getByTestId("secret-key").textContent).toMatch(/^whsec_/);
+  });
+});
+
+describe("EndpointDetail · FR-DSH-126 paging", () => {
+  let api: MockDashboardApi;
+  beforeEach(() => {
+    localStorage.clear();
+    resetMockDashboardApi();
+    api = createMockDashboardApi({ latencyMs: 0 });
+  });
+
+  it("shows 50 deliveries, loads more in place, and hides the button on the last page", async () => {
+    const user = userEvent.setup();
+    const m = await signIn(api);
+    const ep = (await api.listEndpoints("test")).find((e) => !e.disabled)!;
+    const rows: Delivery[] = Array.from({ length: 120 }, (_, i) => ({
+      id: `dlv_big${120 - i}` as const, livemode: false,
+      event: { id: `evt_big${120 - i}` as const, type: "invoice.settled", objectId: "inv_big", createdAt: 1_757_000_000_000 - i * 60_000 },
+      endpoint: { id: ep.id, url: ep.url }, status: "succeeded", attempt: 1, maxAttempts: 8, attemptsMade: 1, endpointDisabled: false,
+      lastResponseCode: 200, nextAttemptAt: null, attempts: [],
+    }));
+    const big: MockDashboardApi = {
+      ...api,
+      async listDeliveries(_id, filter = {}) {
+        const limit = filter.limit ?? 50;
+        const start = filter.startingAfter ? rows.findIndex((r) => r.id === filter.startingAfter) + 1 : 0;
+        return { data: rows.slice(start, start + limit), hasMore: start + limit < rows.length };
+      },
+    };
+    mount(big, m, <EndpointDetail endpointId={ep.id} />);
+    const list = await screen.findByRole("list", { name: /deliveries/i });
+    await waitFor(() => expect(within(list).getAllByRole("listitem")).toHaveLength(50));
+    expect(screen.getByText(/50 shown · more available/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /deliveries/i })).getAllByRole("listitem")).toHaveLength(100));
+    await user.click(screen.getByRole("button", { name: /load more/i }));
+    await waitFor(() => expect(within(screen.getByRole("list", { name: /deliveries/i })).getAllByRole("listitem")).toHaveLength(120));
+    expect(screen.queryByRole("button", { name: /load more/i })).toBeNull();
   });
 });

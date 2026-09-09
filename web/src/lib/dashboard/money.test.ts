@@ -2,6 +2,7 @@
  * Customers, invoices, ledger, balance, settings, notifications, activity
  * in the mock. FR-DSH-050/051, 060–062, 100–105, 120–125, 130–133, 140–142.
  */
+import type { LedgerEntry } from "./types";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createMockDashboardApi, resetMockDashboardApi, type MockDashboardApi } from "./mock-api";
 import { parseRate } from "@/lib/meter/math";
@@ -22,10 +23,10 @@ describe("mock dashboard api — customers, invoices, ledger", () => {
   });
 
   it("lists customers with totals and searches by email (FR-DSH-050)", async () => {
-    const all = await api.listCustomers("test", {});
+    const all = (await api.listCustomers("test", {})).data;
     expect(all.length).toBeGreaterThan(3);
     const withEmail = all.find((c) => c.email)!;
-    const found = await api.listCustomers("test", { search: withEmail.email!.slice(0, 4) });
+    const found = (await api.listCustomers("test", { search: withEmail.email!.slice(0, 4) })).data;
     expect(found.some((c) => c.id === withEmail.id)).toBe(true);
     const d = await api.getCustomer(withEmail.id);
     expect(d.customer.id).toBe(withEmail.id);
@@ -34,26 +35,34 @@ describe("mock dashboard api — customers, invoices, ledger", () => {
   });
 
   it("lists invoices with gross/fee/net, filters by range and subscription (FR-DSH-060)", async () => {
-    const all = await api.listInvoices("test", {});
+    const all = (await api.listInvoices("test", { limit: 100 })).data;
     expect(all.length).toBeGreaterThan(5);
     for (const inv of all) expect(usd(inv.grossUsd) - usd(inv.feeUsd)).toBe(usd(inv.netUsd));
     const sub = all[0]!.subscription;
-    const bySub = await api.listInvoices("test", { subscription: sub });
+    const bySub = (await api.listInvoices("test", { subscription: sub, limit: 100 })).data;
     expect(bySub.every((i) => i.subscription === sub)).toBe(true);
-    const recent = await api.listInvoices("test", { since: now - 3_600_000 });
+    const recent = (await api.listInvoices("test", { since: now - 3_600_000, limit: 100 })).data;
     expect(recent.every((i) => i.settledAt >= now - 3_600_000)).toBe(true);
   });
 
   it("ledger has deposit, settlement, fee, refund rows that reconcile with invoices (FR-DSH-122)", async () => {
-    const ledger = await api.listLedger("test", {});
+    // Walk every page (FR-DSH-126): the reconciliation needs the whole ledger.
+    const ledger: LedgerEntry[] = [];
+    for (let cursor: string | undefined; ; ) {
+      const page = await api.listLedger("test", { limit: 100, startingAfter: cursor });
+      ledger.push(...page.data);
+      if (!page.hasMore) break;
+      cursor = page.data[page.data.length - 1]!.id;
+    }
+    expect(ledger.length).toBeGreaterThan(100);
     const kinds = new Set(ledger.map((l) => l.kind));
     expect([...kinds].sort()).toEqual(["deposit", "fee", "refund", "settlement"]);
     for (let i = 1; i < ledger.length; i++) expect(ledger[i - 1]!.blockTime).toBeGreaterThanOrEqual(ledger[i]!.blockTime);
-    const invoices = await api.listInvoices("test", {});
+    const invoices = (await api.listInvoices("test", { limit: 100 })).data;
     const settlementTotal = ledger.filter((l) => l.kind === "settlement" && !l.reversedBy).reduce((a, l) => a + usd(l.amountUsd), 0n);
     const grossTotal = invoices.reduce((a, i) => a + usd(i.grossUsd), 0n);
     expect(settlementTotal).toBe(grossTotal);
-    const onlyFees = await api.listLedger("test", { kind: "fee" });
+    const onlyFees = (await api.listLedger("test", { kind: "fee" })).data;
     expect(onlyFees.every((l) => l.kind === "fee")).toBe(true);
     for (const l of ledger) expect(l.txId).toMatch(/^0x/);
   });
@@ -118,7 +127,7 @@ describe("mock dashboard api — settings, notifications, activity", () => {
   it("deletes test data after the business name is typed (FR-DSH-104)", async () => {
     await expect(api.deleteTestData({ confirmName: "Wrong" })).rejects.toMatchObject({ code: "invalid_input" });
     await api.deleteTestData({ confirmName: "Nimbus" });
-    expect(await api.listProducts("test", { includeArchived: true })).toHaveLength(0);
-    expect((await api.listProducts("live", { includeArchived: true })).length).toBeGreaterThan(0);
+    expect((await api.listProducts("test", { includeArchived: true })).data).toHaveLength(0);
+    expect((await api.listProducts("live", { includeArchived: true })).data.length).toBeGreaterThan(0);
   });
 });

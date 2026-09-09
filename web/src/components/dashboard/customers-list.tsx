@@ -14,17 +14,24 @@ import { Search } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { timeAgo } from "@/lib/dashboard/format";
 import { useMode } from "@/lib/dashboard/mode";
-import { usePoll } from "@/lib/dashboard/use-poll";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { cn } from "@/lib/utils";
+import { LoadMore } from "./load-more";
 import { useMerchant } from "./merchant-context";
+
+/** Rows per page (FR-DSH-126). */
+const PAGE = 50;
 
 export function CustomersList() {
   const { api } = useMerchant();
   const mode = useMode();
   const pathname = usePathname();
   const [search, setSearch] = useState("");
-  const fetcher = useCallback(() => api.listCustomers(mode, { search }), [api, mode, search]);
-  const { data, loading, stale } = usePoll(fetcher);
+  // FR-DSH-126: pages by cursor; a search or mode change makes a new fetcher and resets to page one.
+  const fetchPage = useCallback((startingAfter?: string) => api.listCustomers(mode, { search, startingAfter, limit: PAGE }), [api, mode, search]);
+  const paged = usePagedList(fetchPage);
+  const { loading, stale } = paged;
+  const data = paged.loading ? null : paged.rows;
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000);
@@ -79,6 +86,9 @@ export function CustomersList() {
             );
           })}
         </ol>
+      )}
+      {!loading && data && data.length > 0 && (
+        <LoadMore shown={paged.rows.length} hasMore={paged.hasMore} loading={paged.loadingMore} onMore={() => void paged.more()} />
       )}
     </div>
   );

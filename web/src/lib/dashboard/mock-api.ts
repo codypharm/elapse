@@ -42,10 +42,19 @@ import {
   type Notification,
   type NotificationSettings,
   type Overview,
+  type Page,
+  type PageOptions,
   type Product,
   type Subscription,
   type WebhookEndpoint,
 } from "./types";
+
+/** One page of an already-filtered, newest-first list, by the API's cursor rule (FR-API-080, FR-DSH-126). */
+export function pageOf<T extends { id: string }>(all: T[], o: PageOptions): Page<T> {
+  const limit = o.limit ?? 50;
+  const start = o.startingAfter ? all.findIndex((r) => r.id === o.startingAfter) + 1 : 0;
+  return { data: all.slice(start, start + limit).map((r) => ({ ...r })), hasMore: start + limit < all.length };
+}
 
 export class DashboardApiError extends Error {
   constructor(
@@ -99,23 +108,23 @@ export interface DashboardApi extends DashboardApiMore {
   /** Enqueues a synthetic event of `type`; the worker delivers it normally (FR-DSH-082). */
   sendTestEvent(id: string, type: EventType, opts?: WriteOpts): Promise<{ event: Event; delivery: Delivery }>;
   /** Deliveries for one endpoint, newest first (FR-DSH-083). */
-  listDeliveries(endpointId: string, filter?: { status?: Delivery["status"] }): Promise<Delivery[]>;
+  listDeliveries(endpointId: string, filter?: { status?: Delivery["status"] } & PageOptions): Promise<Page<Delivery>>;
   getDelivery(id: string): Promise<Delivery>;
   /** A fresh manual attempt; the automatic schedule is untouched (FR-DSH-084). */
   resendDelivery(id: string, opts?: WriteOpts): Promise<Delivery>;
 
-  listEvents(mode: Mode, filter: { type?: EventType; since?: number; until?: number }): Promise<Event[]>;
+  listEvents(mode: Mode, filter: { type?: EventType; since?: number; until?: number } & PageOptions): Promise<Page<Event>>;
   getEvent(id: string): Promise<{ event: Event; deliveries: Delivery[] }>;
 
   /** Active products by default; `includeArchived` for the full list (FR-DSH-030). */
-  listProducts(mode: Mode, filter: { includeArchived?: boolean }): Promise<Product[]>;
+  listProducts(mode: Mode, filter: { includeArchived?: boolean } & PageOptions): Promise<Page<Product>>;
   createProduct(mode: Mode, input: ProductInput, opts?: WriteOpts): Promise<Product>;
   updateProduct(id: string, input: Partial<ProductInput> & { status?: Product["status"] }, opts?: WriteOpts): Promise<Product>;
   /** A test/live checkout session for the product; `url` is what the merchant copies (FR-DSH-032). */
   createCheckoutLink(productId: string, opts?: WriteOpts): Promise<{ id: `cs_${string}`; url: string }>;
 
   /** Newest first (FR-DSH-040). */
-  listSubscriptions(mode: Mode, filter: { status?: Subscription["status"]; product?: string; customer?: string }): Promise<Subscription[]>;
+  listSubscriptions(mode: Mode, filter: { status?: Subscription["status"]; product?: string; customer?: string } & PageOptions): Promise<Page<Subscription>>;
   /** The meter, its lifecycle events oldest first, and its settlements newest first (FR-DSH-041/042). */
   getSubscription(id: string): Promise<{ subscription: Subscription; timeline: Event[]; invoices: Invoice[] }>;
   /** Merchant cancel: same contract path as the subscriber's (FR-DSH-043, BR-DSH-008). */
@@ -125,11 +134,11 @@ export interface DashboardApi extends DashboardApiMore {
 export type CancelReceipt = { secondsElapsed: number; amountSettledUsd: string; refundedUsd: string; canceledAt: number };
 
 export interface DashboardApiMore {
-  listCustomers(mode: Mode, filter: { search?: string }): Promise<Customer[]>;
+  listCustomers(mode: Mode, filter: { search?: string } & PageOptions): Promise<Page<Customer>>;
   getCustomer(id: string): Promise<{ customer: Customer; subscriptions: Subscription[]; events: Event[] }>;
-  listInvoices(mode: Mode, filter: { subscription?: string; since?: number; until?: number }): Promise<Invoice[]>;
+  listInvoices(mode: Mode, filter: { subscription?: string; since?: number; until?: number } & PageOptions): Promise<Page<Invoice>>;
   /** Append-only money movements, newest first (FR-DSH-122). */
-  listLedger(mode: Mode, filter: { kind?: LedgerKind; subscription?: string; since?: number; until?: number }): Promise<LedgerEntry[]>;
+  listLedger(mode: Mode, filter: { kind?: LedgerKind; subscription?: string; since?: number; until?: number } & PageOptions): Promise<Page<LedgerEntry>>;
   getBalance(mode: Mode): Promise<Balance>;
   updateMerchant(input: Partial<Pick<Merchant, "name" | "supportEmail" | "supportUrl" | "branding">>, opts?: WriteOpts): Promise<Merchant>;
   /** Stores the checkout logo, a PNG ≤ 50 KB, and returns the merchant with its new `branding.logoUrl` (FR-DSH-103, FR-API-104). */
@@ -710,13 +719,12 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
 
     async listDeliveries(endpointId, filter = {}) {
       const { data } = findEndpoint(endpointId);
-      return wait(
-        data.deliveries
-          .filter((d) => d.endpoint.id === endpointId && (!filter.status || d.status === filter.status))
-          .sort((a, b) => b.event.createdAt - a.event.createdAt)
-          // Like the API's list: a summary with the last attempt only; the drawer fetches the rest (found 2026-09-06).
-          .map((d) => ({ ...present(data, d), attempts: d.attempts.slice(-1) })),
-      );
+      const all = data.deliveries
+        .filter((d) => d.endpoint.id === endpointId && (!filter.status || d.status === filter.status))
+        .sort((a, b) => b.event.createdAt - a.event.createdAt)
+        // Like the API's list: a summary with the last attempt only; the drawer fetches the rest (found 2026-09-06).
+        .map((d) => ({ ...present(data, d), attempts: d.attempts.slice(-1) }));
+      return wait(pageOf(all, filter));
     },
 
     async getDelivery(id) {
@@ -748,21 +756,14 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
 
     async listEvents(mode, filter) {
       const d = dataFor(current().id, mode);
-      return wait(
-        d.events
-          .filter((e) => (!filter.type || e.type === filter.type) && (!filter.since || e.createdAt >= filter.since) && (!filter.until || e.createdAt <= filter.until))
-          .map((e) => ({ ...e })),
-      );
+      const all = d.events.filter((e) => (!filter.type || e.type === filter.type) && (!filter.since || e.createdAt >= filter.since) && (!filter.until || e.createdAt <= filter.until));
+      return wait(pageOf(all, filter));
     },
 
     async listProducts(mode, filter) {
       const d = dataFor(current().id, mode);
-      return wait(
-        d.products
-          .filter((p) => filter.includeArchived || p.status === "active")
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .map((p) => ({ ...p })),
-      );
+      const all = d.products.filter((p) => filter.includeArchived || p.status === "active").sort((a, b) => b.createdAt - a.createdAt);
+      return wait(pageOf(all, filter));
     },
 
     async createProduct(mode, input, opts = {}) {
@@ -810,12 +811,10 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
 
     async listSubscriptions(mode, filter) {
       const d = dataFor(current().id, mode);
-      return wait(
-        d.subscriptions
-          .filter((x) => (!filter.status || x.status === filter.status) && (!filter.product || x.product.id === filter.product) && (!filter.customer || x.customer.id === filter.customer))
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .map((x) => ({ ...x })),
-      );
+      const all = d.subscriptions
+        .filter((x) => (!filter.status || x.status === filter.status) && (!filter.product || x.product.id === filter.product) && (!filter.customer || x.customer.id === filter.customer))
+        .sort((a, b) => b.createdAt - a.createdAt);
+      return wait(pageOf(all, filter));
     },
 
     async getSubscription(id) {
@@ -896,12 +895,8 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
     async listCustomers(mode, filter) {
       const d = dataFor(current().id, mode);
       const q = filter.search?.trim().toLowerCase();
-      return wait(
-        d.customers
-          .filter((c) => !q || (c.email ?? "").toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
-          .sort((a, b) => b.createdAt - a.createdAt)
-          .map((c) => ({ ...c })),
-      );
+      const all = d.customers.filter((c) => !q || (c.email ?? "").toLowerCase().includes(q) || c.id.toLowerCase().includes(q)).sort((a, b) => b.createdAt - a.createdAt);
+      return wait(pageOf(all, filter));
     },
 
     async getCustomer(id) {
@@ -921,21 +916,16 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
 
     async listInvoices(mode, filter) {
       const d = dataFor(current().id, mode);
-      return wait(
-        d.invoices
-          .filter((i) => (!filter.subscription || i.subscription === filter.subscription) && (!filter.since || i.settledAt >= filter.since) && (!filter.until || i.settledAt <= filter.until))
-          .sort((a, b) => b.settledAt - a.settledAt)
-          .map((i) => ({ ...i })),
-      );
+      const all = d.invoices
+        .filter((i) => (!filter.subscription || i.subscription === filter.subscription) && (!filter.since || i.settledAt >= filter.since) && (!filter.until || i.settledAt <= filter.until))
+        .sort((a, b) => b.settledAt - a.settledAt);
+      return wait(pageOf(all, filter));
     },
 
     async listLedger(mode, filter) {
       const d = dataFor(current().id, mode);
-      return wait(
-        d.ledger
-          .filter((l) => (!filter.kind || l.kind === filter.kind) && (!filter.subscription || l.subscription === filter.subscription) && (!filter.since || l.blockTime >= filter.since) && (!filter.until || l.blockTime <= filter.until))
-          .map((l) => ({ ...l })),
-      );
+      const all = d.ledger.filter((l) => (!filter.kind || l.kind === filter.kind) && (!filter.subscription || l.subscription === filter.subscription) && (!filter.since || l.blockTime >= filter.since) && (!filter.until || l.blockTime <= filter.until));
+      return wait(pageOf(all, filter));
     },
 
     async getBalance(mode) {

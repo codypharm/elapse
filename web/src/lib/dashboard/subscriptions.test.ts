@@ -22,18 +22,18 @@ describe("mock dashboard api — subscriptions", () => {
   });
 
   it("lists subscriptions newest first with status and product filters (FR-DSH-040)", async () => {
-    const all = await api.listSubscriptions("test", {});
+    const all = (await api.listSubscriptions("test", {})).data;
     expect(all.length).toBeGreaterThan(10);
     for (let i = 1; i < all.length; i++) expect(all[i - 1]!.createdAt).toBeGreaterThanOrEqual(all[i]!.createdAt);
-    const active = await api.listSubscriptions("test", { status: "active" });
+    const active = (await api.listSubscriptions("test", { status: "active" })).data;
     expect(active.every((s) => s.status === "active")).toBe(true);
     const product = all[0]!.product.id;
-    const byProduct = await api.listSubscriptions("test", { product });
+    const byProduct = (await api.listSubscriptions("test", { product })).data;
     expect(byProduct.every((s) => s.product.id === product)).toBe(true);
   });
 
   it("returns a detail with timeline events and settlements (FR-DSH-041/042)", async () => {
-    const canceled = (await api.listSubscriptions("test", { status: "canceled" }))[0]!;
+    const canceled = (await api.listSubscriptions("test", { status: "canceled" })).data[0]!;
     const d = await api.getSubscription(canceled.id);
     expect(d.subscription.id).toBe(canceled.id);
     expect(d.timeline.map((e) => e.type)).toEqual(expect.arrayContaining(["subscription.created", "subscription.canceled"]));
@@ -45,7 +45,7 @@ describe("mock dashboard api — subscriptions", () => {
   });
 
   it("merchant cancel settles whole seconds and refunds the rest (FR-DSH-043, BR-DSH-008)", async () => {
-    const active = (await api.listSubscriptions("test", { status: "active" }))[0]!;
+    const active = (await api.listSubscriptions("test", { status: "active" })).data[0]!;
     const before = await api.getSubscription(active.id);
     now += 30_000;
     const { subscription, receipt } = await api.cancelSubscription(active.id, { idempotencyKey: "c1" });
@@ -65,7 +65,7 @@ describe("mock dashboard api — subscriptions", () => {
   });
 
   it("refuses to cancel a canceled meter", async () => {
-    const canceled = (await api.listSubscriptions("test", { status: "canceled" }))[0]!;
+    const canceled = (await api.listSubscriptions("test", { status: "canceled" })).data[0]!;
     await expect(api.cancelSubscription(canceled.id)).rejects.toMatchObject({ code: "invalid_state" });
   });
 });

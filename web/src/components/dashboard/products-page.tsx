@@ -22,22 +22,29 @@ import { fieldError } from "@/lib/forms/field-error";
 import { DashboardApiError, type ProductInput } from "@/lib/dashboard/mock-api";
 import { useMode } from "@/lib/dashboard/mode";
 import type { Product } from "@/lib/dashboard/types";
-import { usePoll } from "@/lib/dashboard/use-poll";
+import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { formatUsd, parseRate, perHour } from "@/lib/meter/math";
 import { cn } from "@/lib/utils";
 import { CheckBox } from "./check-box";
+import { LoadMore } from "./load-more";
 import { useMerchant } from "./merchant-context";
 import { Page, PageHeader } from "./page-header";
 import { ProductDrawer } from "./product-drawer";
 import { StatusChip } from "./status-chip";
+
+/** Rows per page (FR-DSH-126). */
+const PAGE = 50;
 
 export function ProductsPage() {
   const { api } = useMerchant();
   const mode = useMode();
   const params = useSearchParams();
   const [showArchived, setShowArchived] = useState(false);
-  const fetcher = useCallback(() => api.listProducts(mode, { includeArchived: showArchived }), [api, mode, showArchived]);
-  const { data, loading, stale, reload } = usePoll(fetcher);
+  // FR-DSH-126: pages by cursor; toggling archived or switching mode makes a new fetcher and resets to page one.
+  const fetchPage = useCallback((startingAfter?: string) => api.listProducts(mode, { includeArchived: showArchived, startingAfter, limit: PAGE }), [api, mode, showArchived]);
+  const paged = usePagedList(fetchPage);
+  const { loading, stale, reload } = paged;
+  const data = paged.loading ? null : paged.rows;
 
   const [drawer, setDrawer] = useState<{ open: true; product?: Product } | null>(params.get("new") === "1" ? { open: true } : null);
   const [formError, setFormError] = useState<{ field?: "name" | "rate" | "description"; message: string } | null>(null);
@@ -194,6 +201,9 @@ export function ProductsPage() {
             );
           })}
         </ol>
+      )}
+      {!loading && data && data.length > 0 && (
+        <LoadMore shown={paged.rows.length} hasMore={paged.hasMore} loading={paged.loadingMore} onMore={() => void paged.more()} />
       )}
 
       {drawer && (

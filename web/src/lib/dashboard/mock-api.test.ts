@@ -76,7 +76,7 @@ describe("mock dashboard api — auth", () => {
     const again = createMockDashboardApi({ now: () => now, latencyMs: 0 });
     const me = await again.me();
     expect(me.name).toBe("Keep Co");
-    expect((await again.listProducts("test", {})).map((p) => p.name)).toEqual(["Seat"]);
+    expect((await again.listProducts("test", {})).data.map((p) => p.name)).toEqual(["Seat"]);
   });
 
   it("signs out (FR-DSH-014)", async () => {

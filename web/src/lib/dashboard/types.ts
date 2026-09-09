@@ -203,6 +203,10 @@ export type Delivery = {
 export type LedgerKind = "deposit" | "settlement" | "fee" | "refund";
 
 /** One money movement, from an indexed contract event. Append-only (BR-DSH-011). */
+/** Cursor paging (FR-DSH-126, API FR-API-080): `startingAfter` is the last row's id; `limit` defaults to 50. */
+export type PageOptions = { startingAfter?: string; limit?: number };
+export type Page<T> = { data: T[]; hasMore: boolean };
+
 export type LedgerEntry = {
   id: `led_${string}`;
   livemode: boolean;
