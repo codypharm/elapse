@@ -1317,6 +1317,11 @@
             "type": "string",
             "nullable": true
           },
+          "manage_url": {
+            "type": "string",
+            "description": "The hosted meter page. Link subscribers here to pause, resume or stop; it shows the receipt after.",
+            "example": "https://elapse.finance/c/cs_7Ha2mV9kLp3RxT"
+          },
           "rate_usd_per_second": {
             "type": "string"
           },
@@ -1390,6 +1395,7 @@
           "product",
           "customer",
           "checkout_session",
+          "manage_url",
           "rate_usd_per_second",
           "started_at",
           "paused_at",

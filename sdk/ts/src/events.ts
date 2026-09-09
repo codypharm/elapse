@@ -29,6 +29,8 @@ export interface SubscriptionObject {
   status: SubscriptionStatus;
   product: string;
   customer: string;
+  /** The hosted meter page. Link subscribers here to pause, resume or stop; it shows the receipt after (ADR 2026-09-09). */
+  manage_url: string;
   rate_usd_per_second: string;
   started_at: number | null;
   paused_at: number | null;

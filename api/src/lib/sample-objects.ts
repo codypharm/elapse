@@ -1,4 +1,5 @@
 import type { EventType } from "./event-types";
+import { config } from "../config";
 
 /**
  * Payloads for `POST /v1/webhook_endpoints/:id/test` (FR-API-061): shaped like
@@ -12,6 +13,8 @@ export function sampleObject(type: EventType, livemode: boolean, now = Math.floo
     status: "active",
     product: "prod_test0000000000",
     customer: "cus_test00000000000",
+    checkout_session: "cs_test000000000000",
+    manage_url: `${config.checkoutBaseUrl}/c/cs_test000000000000`,
     rate_usd_per_second: "0.004",
     started_at: now - 83,
     paused_at: null,

@@ -58,6 +58,23 @@ curl -X POST "$ELAPSE_API_URL/v1/subscriptions/sub_…/cancel" \
 
 The call answers `202`. Treat the webhook as the truth, not the response.
 
+## Let subscribers manage their meter
+
+Pause, resume and stop are the subscriber's actions, taken on the hosted meter page with their own signature. Your server cannot pause on their behalf, and there is no pause endpoint. Instead, link them there: every Subscription carries `manage_url`, the same page they checked out on. While the meter runs it shows the counter, **Stop**, and **Pause** if the Product allows it; after a stop it shows the receipt. Put the link where you would put "Manage subscription".
+
+<CodeGroup>
+```ts TypeScript
+const sub = await elapse.subscriptions.retrieve("sub_…");
+// <a href={sub.manage_url}>Manage your meter</a>
+```
+```bash cURL
+curl "$ELAPSE_API_URL/v1/subscriptions/sub_…" \
+  -H "Authorization: Bearer $ELAPSE_SECRET_KEY" | jq -r .manage_url
+```
+</CodeGroup>
+
+You find out what they did through webhooks: `subscription.updated` for a pause or resume, `subscription.canceled` for a stop. A stopped meter is final. To bill them again, create a new Checkout session.
+
 ## Build the meter in your own product
 
 Elapse hosts the checkout. Everything after that can live in your UI, with three calls and no polling.

@@ -109,6 +109,8 @@ export function serializeSubscription(row: SubscriptionRow, now = Math.floor(Dat
     product: row.product_id,
     customer: row.customer_id,
     checkout_session: row.checkout_session_id,
+    // ADR 2026-09-09: the hosted session page, where the subscriber pauses, resumes or stops. Always a string.
+    manage_url: `${config.checkoutBaseUrl}/c/${row.checkout_session_id}`,
     rate_usd_per_second: baseUnitsToDecimal(BigInt(row.rate_per_second_wei), d),
     started_at: startedAt,
     paused_at: epoch(row.paused_at),

@@ -54,6 +54,7 @@ export const SubscriptionSchema = z
     product: z.string(),
     customer: z.string(),
     checkout_session: z.string().nullable(),
+    manage_url: z.string().openapi({ description: "The hosted meter page. Link subscribers here to pause, resume or stop; it shows the receipt after.", example: "https://elapse.finance/c/cs_7Ha2mV9kLp3RxT" }),
     rate_usd_per_second: z.string(),
     started_at: z.number().int().nullable(),
     paused_at: z.number().int().nullable(),

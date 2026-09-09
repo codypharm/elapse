@@ -85,10 +85,14 @@ describe("FR-SDK-004 checkout sessions", () => {
 });
 
 describe("FR-SDK-005/008 subscriptions", () => {
-  const sub = { id: "sub_3kP9mL2qR8tVxY", object: "subscription", status: "active", product: "prod_1", customer: "cus_1", rate_usd_per_second: "0.004", started_at: 1, canceled_at: null };
+  const sub = { id: "sub_3kP9mL2qR8tVxY", object: "subscription", status: "active", product: "prod_1", customer: "cus_1", rate_usd_per_second: "0.004", started_at: 1, canceled_at: null, manage_url: "https://elapse.finance/c/cs_1" };
   it("retrieve, cancel, list with filters; unknown status throws before a request", async () => {
     mock.on(() => ({ status: 200, body: sub }));
-    expect((await elapse.subscriptions.retrieve("sub_3kP9mL2qR8tVxY")).status).toBe("active");
+    const got = await elapse.subscriptions.retrieve("sub_3kP9mL2qR8tVxY");
+    expect(got.status).toBe("active");
+    // FR-SDK-005 (ADR 2026-09-09): typed as a string, so the typecheck fails if the field leaves the type.
+    const manage: string = got.manage_url;
+    expect(manage).toBe("https://elapse.finance/c/cs_1");
     mock.on(() => ({ status: 202, body: { ...sub, status: "canceled", seconds_elapsed: 83, amount_settled: "0.332" } }));
     const c = await elapse.subscriptions.cancel("sub_3kP9mL2qR8tVxY");
     expect(mock.seen[0]!.path).toBe("/v1/subscriptions/sub_3kP9mL2qR8tVxY/cancel");

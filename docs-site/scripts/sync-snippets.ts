@@ -16,6 +16,9 @@
  *
  * `--check` writes nothing and exits 1 naming any file that differs.
  */
+// Sample payloads carry `manage_url`, built from the API's checkout base; the docs show the hosted one
+// (BR-DOC-008), never a developer's localhost. package.json sets NEXT_PUBLIC_CHECKOUT_URL for this script.
+
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { api, resetDb, seedMerchant, type Fixture } from "./helpers";
+import { sql } from "../src/db/client";
 import { setChainClient } from "../src/chain/relayer";
 import { fakeChain } from "./fake-chain";
 import { privyFixture } from "./privy-fixture";
@@ -46,6 +47,8 @@ describe("FR-API-041 retrieve", () => {
     expect(r.status).toBe(200);
     expect(r.body).toMatchObject({ id: subId, object: "subscription", status: "active", product: productId, customer: customerId, rate_usd_per_second: "0.004", max_escrow_usd: "14.4", funded_usd: "14.4", stream_address: STREAM, chain_id: 10143, currency: "ausd", livemode: false });
     expect(r.body.seconds_elapsed).toBeGreaterThanOrEqual(0);
+    // FR-API-040 (ADR 2026-09-09): the hosted session page, where the subscriber pauses, resumes or stops.
+    expect(r.body.manage_url).toBe(`http://localhost:3000/c/${r.body.checkout_session}`);
     const other = await seedMerchant();
     expect((await api("GET", `/v1/subscriptions/${subId}`, { key: other.skTest })).status).toBe(404);
     expect((await api("GET", `/v1/subscriptions/${subId}`, { key: m.skLive })).status).toBe(404);
@@ -68,6 +71,9 @@ describe("FR-API-042 merchant cancel", () => {
     await api("POST", "/internal/ingest", { headers: INGEST, body: streamCanceled(T0 + 83, 83, "332000", "14068000", tx) });
     const after = await api("GET", `/v1/subscriptions/${subId}`, { key: m.skTest });
     expect(after.body).toMatchObject({ status: "canceled", ended_reason: "canceled", seconds_elapsed: 83, settled_usd: "0.332" });
+    expect(after.body.manage_url).toBe(`http://localhost:3000/c/${after.body.checkout_session}`); // still a string after cancel
+    const [ev] = await sql`SELECT data FROM events WHERE type = 'subscription.canceled'`;
+    expect(ev.data.object.manage_url).toBe(after.body.manage_url);
   });
 
   it("FR_API_042_cancel_of_an_incomplete_or_canceled_subscription_is_409", async () => {

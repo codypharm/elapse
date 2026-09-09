@@ -3,6 +3,7 @@
  * FR-DOC-010 the Quickstart has exactly seven steps, each with a code block.
  * FR-DOC-013 the Quickstart's opening line and closing links.
  * FR-DOC-020 the Introduction is ≤ 400 words with the payload as its hero code block.
+ * FR-DOC-022 the Subscriptions page has the state diagram and the "manage their meter" section on manage_url.
  * FR-DOC-024 the Testing page has its five sections and no test-clock resource.
  * FR-DOC-043 every TypeScript block has a cURL sibling.
  * BR-DOC-004 no real-looking secret ever appears.
@@ -56,6 +57,17 @@ describe("FR-DOC-010/013 quickstart", () => {
   it("ends with the two next links", () => {
     expect(src).toContain("webhooks/events");
     expect(src).toContain("examples/saas");
+  });
+});
+
+describe("FR-DOC-022 subscriptions", () => {
+  it("has the state diagram and the manage-their-meter section on manage_url (ADR 2026-09-09)", () => {
+    const src = read("subscriptions.mdx");
+    expect(src).toContain("active --> paused: pause");
+    expect(src).toContain("## Let subscribers manage their meter");
+    expect(src).toContain("sub.manage_url");
+    expect(src).toMatch(/no pause endpoint/);
+    expect(src).toMatch(/create a new Checkout session/);
   });
 });
 
