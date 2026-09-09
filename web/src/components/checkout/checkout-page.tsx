@@ -47,6 +47,9 @@ type Load =
   | { status: "error"; kind: "not_found" | "error" }
   | { status: "ready"; session: CheckoutSession };
 
+/** FR-CHK-032: how often a running meter re-reads its session from the server. */
+const FOLLOW_INTERVAL_MS = 5_000;
+
 export function CheckoutPage({ sessionId }: { sessionId: string }) {
   const api = getCheckoutApi(sessionId);
   const real = usesRealApi(sessionId);
@@ -91,6 +94,36 @@ export function CheckoutPage({ sessionId }: { sessionId: string }) {
     setLoad({ status: "loading" });
     setReloadKey((k) => k + 1);
   }, []);
+
+  // FR-CHK-032: the meter follows the server. While the subscription runs or is paused, re-read
+  // the session every 5 s and on focus, so a merchant cancel (FR-API-042) or a cap end on chain
+  // reaches the page without a reload. The receipt then comes from the server's totals (BR-CHK-003).
+  const following = load.status === "ready" && (load.session.subscription?.status === "active" || load.session.subscription?.status === "paused");
+  useEffect(() => {
+    if (!following) return;
+    let alive = true;
+    let inFlight = false;
+    const read = () => {
+      if (inFlight) return;
+      inFlight = true;
+      api
+        .getSession(sessionId)
+        .then((session) => {
+          if (alive) setLoad((l) => (l.status === "ready" ? { status: "ready", session } : l));
+        })
+        .catch(() => {})
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+    const id = setInterval(read, FOLLOW_INTERVAL_MS);
+    window.addEventListener("focus", read);
+    return () => {
+      alive = false;
+      clearInterval(id);
+      window.removeEventListener("focus", read);
+    };
+  }, [following, api, sessionId]);
 
   // Re-derive the view once a second so low balance and the cap end flip
   // without a server round trip; the meter itself ticks at 100 ms inside.
