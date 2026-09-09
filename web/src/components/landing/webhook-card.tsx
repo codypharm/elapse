@@ -30,9 +30,10 @@ export function buildCanceledEvent({
   "data": {
     "object": {
       "id": "sub_1S2xq6Hf9",
+      "object": "subscription",
       "status": "canceled",
       "seconds_elapsed": ${secondsElapsed},
-      "settled_usd": "${amountSettled}",
+      "amount_settled": "${amountSettled}",
       "currency": "ausd",
       "product": "prod_gpu4090",
       "customer": "cus_7Qw2m"

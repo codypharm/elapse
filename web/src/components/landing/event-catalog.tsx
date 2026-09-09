@@ -8,7 +8,7 @@
 const events = [
   ["checkout.session.completed", "Subscriber finished Face ID checkout", "Provision access"],
   ["subscription.created", "Meter started", "Mark entitled"],
-  ["subscription.updated", "Pause, resume, or rate change", "Sync entitlement"],
+  ["subscription.updated", "Subscriber paused or resumed", "Sync entitlement"],
   ["subscription.canceled", "Cancel; elapsed seconds settled", "Revoke access immediately"],
   ["invoice.settled", "Accrued funds settled to you", "Book revenue"],
   ["invoice.payment_failed", "Subscriber's funds ran out", "Pause product access"],
