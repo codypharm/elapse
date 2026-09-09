@@ -19,17 +19,19 @@ Elapse is Stripe Billing for things that should charge by the second. A merchant
 
 ## Status board
 
-| Piece | Path | Spec | State (2026-09-03) |
+| Piece | Path | Spec | State (2026-09-09) |
 | --- | --- | --- | --- |
-| Contracts | `contracts/` | `specs/contracts-frd.md` | Early draft; no funding path, no settle, no tests. **Week-1 kill gate not met.** |
-| Platform API | `api/` | `specs/api-frd.md` | Built and proven live on testnet; `openapi.json` committed for the docs |
-| Indexer | `indexer/` | `specs/indexer-frd.md` | Built; runs locally with `envio dev`, hosted deploy pending |
-| Webhook worker | `api/src/worker/` | `specs/worker-frd.md` | Built (deliveries, keeper, CLI sweep) |
-| SDK (TS) | `sdk/ts/` | `specs/sdk-frd.md` | Published as `@elapse/sdk@0.1.0`; 0.1.1 (new default host) awaiting publish |
-| CLI | `cli/` | `specs/cli-frd.md` | Built (`listen --forward`, `events resend`); npm publish in Week 6 |
-| Web (landing, checkout, dashboard) | `web/` | `specs/landing-frd.md`, `specs/checkout-frd.md`, `specs/dashboard-frd.md` | Landing built and reviewed; hosted checkout built against the mock API (all states, judge mode); dashboard next |
-| Docs site | `docs-site/` (Mintlify, site in `docs-site/site/`) | `specs/docs-site-frd.md` | Built: nine pages, generated reference, synced snippets, CI; hosting connect pending |
-| Example merchant | `examples/saas/` | `specs/examples-frd.md` | Built and proven; source of the Quickstart snippets |
+| Contracts | `contracts/` | `specs/contracts-frd.md` | Built and deployed on Monad testnet 10143 (factory `0x4B76…2840`, 7 Sep): escrow, start, pause and resume by signed relay, cancel, settle with 2 % fee, cap end. Kill gate passed 5 Sep. Mainnet record pending (William deploys). |
+| Platform API | `api/` | `specs/api-frd.md` | Hosted at api.elapse.finance (Railway, Neon Postgres). Every FR-API built including dashboard routes, account routes, CLI sessions, search. Auth audit of all routes clean 9 Sep. |
+| Indexer | `indexer/` | `specs/indexer-frd.md` | Hosted on Envio Cloud, endpoint `2adf0f0`, ingesting into the API. `pnpm reconcile` still deferred. |
+| Webhook worker | `api/src/worker/` | `specs/worker-frd.md` | Hosted as the second Railway process: deliveries with retries and auto-disable, keeper (hourly settle, cap ends), reconcile, heartbeat, CLI sweep, expiry notices and emails. |
+| SDK (TS) | `sdk/ts/` | `specs/sdk-frd.md` | `@elapse/sdk@0.1.3` on npm: ten methods, `manage_url`, invoice and product filters. |
+| CLI | `cli/` | `specs/cli-frd.md` | `@elapse/cli@0.1.2` on npm: `listen --forward`, `events`, `products`, `checkout`. |
+| Web (landing, checkout, account, dashboard) | `web/` | `specs/landing-frd.md`, `specs/checkout-frd.md`, `specs/dashboard-frd.md` | Hosted at elapse.finance (Vercel) on the real API: landing, checkout with Privy and add money, account page, full dashboard with paging, search as you type, notifications. |
+| Docs site | `docs-site/` (Mintlify, site in `docs-site/site/`) | `specs/docs-site-frd.md` | Hosted at docs.elapse.finance: Quickstart, guides, generated API reference, snippets synced from code, CI. |
+| Example merchant | `examples/saas/` | `specs/examples-frd.md` | Proven against production twice on 9 Sep: through the CLI and through a dashboard-added endpoint via a tunnel. |
+
+Judge pass on the hosted app in test mode completed 9 Sep. Remaining before 13 Oct: demo video, mainnet decision, submission.
 
 ## Decisions log
 

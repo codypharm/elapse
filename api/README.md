@@ -30,9 +30,12 @@ bun test                                      # migrates + runs against elapse_t
 | `src/routes/` | One file per resource, each an `OpenAPIHono` router with Zod request/response schemas; `operationId` equals the SDK method name |
 | `src/middleware/auth.ts` | `requireAuth`: Bearer `sk_`/`pk_` or the dashboard session cookie (`X-Elapse-Mode`, Origin check), mode scoping (FR-API-001, 004, 101, 102) |
 | `scripts/seed-merchant.ts` | Dev only: merchant + publishable keys + one printed `sk_test` |
-| `src/worker/` | The webhook worker, a second process (`bun run worker`): claim with `FOR UPDATE SKIP LOCKED`, sign, POST, retry schedule, attempt rows, time-based auto-disable. Imports only `db/` and `lib/` |
+| `src/worker/` | The second process (`bun run worker`): webhook deliveries (claim with `FOR UPDATE SKIP LOCKED`, sign, POST, retry schedule, attempt rows, time-based auto-disable), `keeper.ts` (hourly settle, cap ends), `reconcile.ts`, `heartbeat.ts`, `notify.ts` (expiry notices, first delivery, notification emails). Imports only `db/`, `lib/`, `chain/`, `services/` |
+| `src/services/` | Logic shared by routes and the worker: checkout flow, the CLI SSE stream |
+| `src/chain/` | viem relayer client and `deployments.ts` (which token each mode escrows) |
+| `deployments/` | `<chainId>.json` copied from `contracts/deployments/` by `pnpm sync-deployments` |
 | `src/db/` | Bun `SQL` client, migration runner, one repository per table |
-| `src/lib/` | Pure helpers: ids, key generation and hashing, decimal money, errors |
+| `src/lib/` | Pure helpers: ids, key generation and hashing, decimal money, errors, signature, mail templates (one shell for sign-in, notices, receipts) |
 | `migrations/` | Plain SQL, `NNNN_name.sql`, applied once each by `bun run migrate` |
 | `test/` | `bun test`; the preload migrates the test database; helpers seed a merchant with keys |
 
@@ -88,20 +91,20 @@ indexer is reported as `indexer.ok: false`, never as a 500.
 
 ## Keeper
 
-Inside the worker process (`src/worker/keeper.ts`): every 30 s it calls `settleBatch` for active streams
-last settled over 5 minutes ago and for any stream past its cap, whose first `settle()` emits the cap-end
-pair. It stamps `last_settle_requested_at` and nothing else; the `Settled`/`StreamCanceled` logs come back
+Inside the worker process (`src/worker/keeper.ts`): every tick it calls `settleBatch` for active streams
+last settled over `KEEPER_CADENCE_S` ago (3600 on Railway, [ADR 2026-09-08](../docs/decisions/2026-09-08-keeper-cadence-one-hour.md))
+and for any stream past its cap, whose first `settle()` emits the cap-end pair. It stamps `last_settle_requested_at` and nothing else; the `Settled`/`StreamCanceled` logs come back
 through the indexer. Proven live 2026-09-05: a 60 s cap ended by the keeper, `invoice.payment_failed` +
 `subscription.canceled` + `invoice.settled` delivered 78 s after the start click. `KEEPER=0` disables it.
 
 ## Worker
 
-Spec: [`docs/specs/worker-frd.md`](../docs/specs/worker-frd.md) (signed 2026-09-05). Retries `0s, 30s, 2m, 10m, 1h, 1h, 1h, 1h`, cap 8, 10 s timeout, no redirects, any `2xx` is success. Signs `{t}.{raw_body}` with the endpoint's decrypted `whsec_`, both secrets during a roll's grace window. An endpoint failing for 3 days straight is disabled (bell warning at 24 h). Env: `WORKER_CONCURRENCY` (16), `WORKER_BATCH` (50).
+Spec: [`docs/specs/worker-frd.md`](../docs/specs/worker-frd.md) (signed 2026-09-05). Retries `0s, 30s, 2m, 10m, 1h, 1h, 1h, 1h`, cap 8, 10 s timeout, no redirects, any `2xx` is success. Signs `{t}.{raw_body}` with the endpoint's decrypted `whsec_`, both secrets during a roll's grace window. An endpoint failing for 3 days straight is disabled (bell warning at 24 h, email if the merchant's switch is on). A sweep every minute writes key and secret expiry notices 24 h and 1 h before a roll's grace ends, and the first 2xx per mode writes a first-delivery notice (FR-WRK-042, FR-API-109). Env: `WORKER_CONCURRENCY` (16), `WORKER_BATCH` (50).
 
 ## Modes and chains
 
-Test keys drive real streams on Monad testnet (10143) with `MockUSD`. Live keys do too until a mainnet record exists (`LIVE_CHAIN_ID`, default 10143; [ADR 2026-09-07](../docs/decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md)); they move to mainnet (143) with AUSD when `contracts/deployments/143.json` lands. Whenever the escrow token is `MockUSD` the relayer mints it to the subscriber so nobody hunts for a faucet (FR-API-032); on AUSD a short wallet is refused before any gas is spent (FR-API-034). The relayer's own testnet MON comes from <https://faucet.monad.xyz> (about 5 MON per 12 h, roughly 100 checkouts a day): a platform chore, not a user's.
+Test keys drive real streams on Monad testnet (10143) with `MockUSD`, which the relayer mints to the subscriber at `start` so nobody hunts for a faucet (FR-API-032). Live keys run on the same testnet until a mainnet record exists (`LIVE_CHAIN_ID`, default 10143) but escrow real testnet **AUSD** ([ADR 2026-09-07 add money](../docs/decisions/2026-09-07-add-money-and-ausd-live-on-testnet.md)): nothing is minted, a short wallet sees Add money on the checkout, and `start` refuses before any gas is spent (FR-API-034). Minting is keyed to the token, not the mode, so live moves to mainnet (143) with AUSD when `contracts/deployments/143.json` lands, with no code change. The relayer's own testnet MON comes from <https://faucet.monad.xyz>: a platform chore, not a user's.
 
 ## Hosting (Undecided 11, decided)
 
-API and worker run on Railway as two processes from this repo; Postgres is Neon. `RELAYER_PRIVATE_KEY` lives only in the API process's Railway environment, holds MON for gas and never AUSD. The relayer is its own wallet, set as the factory's `keeper`; the factory owner and fee treasury are a separate wallet William holds. A hardware wallet or multisig for the owner is post-submission (Undecided 12, [ADR 2026-09-07](../docs/decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md)).
+API and worker run on Railway as two services from this repo (built from the `codypharm/elapse` fork); Postgres is Neon. `RELAYER_PRIVATE_KEY` lives in both services' Railway environments (the API opens and cancels streams, the worker's keeper settles them), holds MON for gas and never AUSD. The relayer is its own wallet, set as the factory's `keeper`; the factory owner and fee treasury are a separate wallet William holds. A hardware wallet or multisig for the owner is post-submission (Undecided 12, [ADR 2026-09-07](../docs/decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md)).

@@ -1,36 +1,56 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# web — landing, hosted checkout, merchant dashboard
 
-## Getting Started
+One Next.js 16 App Router app, deployed on Vercel at <https://elapse.finance>.
 
-First, run the development server:
+| Route | What | Rendering | Spec |
+| --- | --- | --- | --- |
+| `/` | Landing for founders and finance owners | Server component, static | `docs/specs/landing-frd.md` |
+| `/c/[session]` | Hosted checkout: Privy sign-in, cap, Face ID permit, live USD ticker, pause, stop, receipt. No chain words outside judge mode. | Client | `docs/specs/checkout-frd.md` |
+| `/account` | The subscriber's meters and receipts across merchants | Client | `docs/specs/checkout-frd.md` (FR-CHK-016..030) |
+| `/login`, `/dashboard/*` | Merchant dashboard: home, products, subscriptions, customers, invoices, balance and payouts, developers (keys, webhooks, events), settings | Client, cookie session | `docs/specs/dashboard-frd.md` |
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Visual world: [`DESIGN.md`](../DESIGN.md) at the repo root. Every surface inherits it; no new direction is rolled per page.
+
+## Run
+
+```sh
+pnpm install
+cp .env.example .env
+pnpm dev                                   # :3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Two data sources, chosen at build time:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Mock.** `NEXT_PUBLIC_DASHBOARD_MOCK=1` runs the dashboard against the in-memory mock with a seeded merchant (`demo@elapse.finance`; the sign-in page shows the link instead of emailing it). The checkout serves `/c/cs_demo`, `/c/cs_ready`, `/c/cs_short` and the other seeded sessions from its own mock without a chain.
+- **Real.** `NEXT_PUBLIC_ELAPSE_API_URL` pointing at `api/` (local `:4000` or the hosted API) plus `NEXT_PUBLIC_PRIVY_APP_ID` and `NEXT_PUBLIC_CHAIN_ID`. Every other session id then goes to the real API.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+`NEXT_PUBLIC_*` values are baked into the bundle at build time; a change needs a rebuild.
 
-## Learn More
+## Test
 
-To learn more about Next.js, take a look at the following resources:
+```sh
+pnpm test            # vitest + testing-library, every component and lib
+pnpm typecheck
+pnpm lint            # eslint with the React Compiler rules; CI enforces it
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Tests are named after the FR they close. Coverage target is 70 % on `src/components/**` and `src/lib/**`. `scripts/*-shots.mjs` take Playwright screenshots of each surface at phone and desktop widths against the mock; `scripts/dashboard-e2e.mjs` drives the dashboard end to end.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Layout
 
-## Deploy on Vercel
+| Path | Purpose |
+| --- | --- |
+| `src/app/` | Routes only; each page mounts one feature component |
+| `src/components/ui/` | Primitives (shadcn), no business logic |
+| `src/components/meter/` | The ticker: `rate × (now − started_at)` at 100 ms, tabular numerals, no layout shift. Unit tests cover elapsed, accrued, rounding, pause, cancel |
+| `src/components/landing/`, `checkout/`, `account/`, `dashboard/`, `login/` | Feature components, each under about 200 lines |
+| `src/lib/checkout/`, `src/lib/dashboard/` | Typed API clients: `mock-api.ts` and `real-api.ts` behind one interface, `client.ts` picks; hooks such as `use-poll` and `use-paged-list` |
+| `src/lib/meter/math.ts` | Decimal money as integer micro-dollars; never `parseFloat` on a rate |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Rules
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Mobile first: base classes target 375 px, `sm:`/`md:`/`lg:` enhance upward. Touch targets at least 44 px. Tables become card stacks on phones.
+- Subscriber copy never mentions wallets, chains, transactions, or addresses. The judge-mode panel on the checkout is the one exception.
+- Motion is orchestrated and respects `prefers-reduced-motion`. Nothing blinks per second; the meter ticks.
+- Merchant tokens live in an HttpOnly cookie set by the API, never in local storage. Subscriber auth is the Privy session and identity token.
+- API paths live in `src/lib/*/real-api.ts` only, never in components.

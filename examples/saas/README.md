@@ -28,6 +28,8 @@ In a second terminal, forward your webhooks to this server. The first line it pr
 npx @elapse/cli listen --forward localhost:3000/webhooks
 ```
 
+The CLI registers a `cli://` endpoint for you on the dashboard. In production you add your own `https://` URL under Developers → Webhooks instead, put the secret it shows once in `ELAPSE_WEBHOOK_SECRET`, and Elapse delivers straight to it with retries; `src/webhooks.ts` does not change.
+
 ## What you will see
 
 ```
