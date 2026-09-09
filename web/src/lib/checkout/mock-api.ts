@@ -40,12 +40,20 @@ export type Receipt = {
 export function buildReceipt(sub: Subscription): Receipt {
   const startedAt = sub.startedAt ?? 0;
   const canceledAt = sub.canceledAt ?? startedAt;
-  const seconds = wholeSeconds(
-    elapsedMsOf({ startedAt, now: canceledAt, pausedAt: sub.pausedAt }),
-  );
   const rate = parseRate(sub.rateUsdPerSecond);
   const cap = parseUsd(sub.fundedUsd);
-  let settled = settledNano(rate, seconds);
+  // BR-CHK-003: the server's totals win. A recount from timestamps only knows a pause still in
+  // progress, not the ones that ended, so it is kept for the mock and for a cap end predicted
+  // ahead of the API (FR-CHK-007).
+  let seconds: number;
+  let settled: bigint;
+  if (sub.settled) {
+    seconds = sub.settled.secondsElapsed;
+    settled = parseUsd(sub.settled.settledUsd);
+  } else {
+    seconds = wholeSeconds(elapsedMsOf({ startedAt, now: canceledAt, pausedAt: sub.pausedAt }));
+    settled = settledNano(rate, seconds);
+  }
   if (settled > cap) settled = cap; // BR-CHK-002
   return {
     secondsElapsed: seconds,

@@ -7,7 +7,7 @@
  * rest), BR-CHK-003.
  */
 import { beforeEach, describe, expect, it } from "vitest";
-import { createMockCheckoutApi, SEEDED_SESSION_IDS } from "./mock-api";
+import { buildReceipt, createMockCheckoutApi, SEEDED_SESSION_IDS } from "./mock-api";
 import { deriveView } from "./view";
 
 const NOW = 1_756_800_000_000;
@@ -170,5 +170,22 @@ describe("mock checkout api", () => {
     expect(j.contractAddress).toMatch(/^0x[0-9a-f]{40}$/i);
     expect(j.deliveries.length).toBeGreaterThan(0);
     expect(JSON.stringify(j)).not.toMatch(/sk_|whsec_/);
+  });
+});
+
+describe("buildReceipt (BR-CHK-003)", () => {
+  it("prefers the server's settled totals over a recount from timestamps", () => {
+    const sub = {
+      id: "sub_1" as const, status: "canceled" as const, startedAt: 1_000_000, pausedAt: null, canceledAt: 1_000_000 + 105_000,
+      endedReason: "canceled" as const, maxDurationSeconds: 3600, fundedUsd: "7.2", rateUsdPerSecond: "0.002",
+      settled: { secondsElapsed: 74, settledUsd: "0.148" },
+    };
+    const r = buildReceipt(sub);
+    expect(r.secondsElapsed).toBe(74);
+    expect(r.amountSettledUsd).toBe("0.148");
+    expect(r.refundedUsd).toBe("7.052");
+    // Without server totals (the mock, or a cap end predicted ahead of the API) it still recounts.
+    const bare = { ...sub, settled: undefined };
+    expect(buildReceipt(bare).secondsElapsed).toBe(105);
   });
 });

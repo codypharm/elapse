@@ -72,6 +72,9 @@ export function mapSubscription(w: WireSubscription): Subscription {
     // The pot: rate × cap. Before start nothing is deposited yet, but the page reads this as the cap.
     fundedUsd: w.max_escrow_usd,
     rateUsdPerSecond: w.rate_usd_per_second,
+    // BR-CHK-003: once stopped, the chain's totals travel with the subscription so a receipt rebuilt
+    // later shows the seconds billed, not started→canceled wall clock (which counts paused time).
+    ...(w.status === "canceled" ? { settled: { secondsElapsed: w.seconds_elapsed, settledUsd: w.settled_usd } } : {}),
   };
 }
 

@@ -71,6 +71,11 @@ describe("mapSession", () => {
     expect(s.product.status).toBe("archived");
     expect(s.subscription).toMatchObject({ status: "canceled", endedReason: "cap_reached", canceledAt: (T0 + 3600) * 1000 });
   });
+  it("BR_CHK_003_a_stopped_subscription_carries_the_server_totals_so_paused_time_is_not_recounted", () => {
+    // 105 s wall clock, 31 s of it paused: the chain settled 74 s. The page must show 74, not 105.
+    const s = mapSession(wireSession({ subscription: wireSub({ status: "canceled", ended_reason: "canceled", started_at: T0, canceled_at: T0 + 105, paused_at: null, funded_usd: "7.2", max_escrow_usd: "7.2", rate_usd_per_second: "0.002", settled_usd: "0.148", seconds_elapsed: 74 }) }) as never);
+    expect(s.subscription?.settled).toEqual({ secondsElapsed: 74, settledUsd: "0.148" });
+  });
 });
 
 describe("real CheckoutApi", () => {

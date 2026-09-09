@@ -53,6 +53,12 @@ export type Subscription = {
   fundedUsd: string;
   /** Snapshot of the product rate at start. */
   rateUsdPerSecond: string;
+  /**
+   * The server's totals once the meter has stopped (BR-CHK-003): whole seconds
+   * billed (paused time excluded) and what was settled. Set by the real API;
+   * the mock and a predicted cap end leave it out and the receipt recounts.
+   */
+  settled?: { secondsElapsed: number; settledUsd: string };
 };
 
 export type Customer = {
