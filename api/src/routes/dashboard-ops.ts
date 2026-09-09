@@ -11,11 +11,11 @@ import { router } from "../lib/openapi";
 import { clientIp, sessionAuth, type AuthEnv } from "../middleware/auth";
 
 /**
- * Dashboard-only operations, cookie auth (API FRD FR-API-106..111):
+ * Dashboard-only operations, cookie auth (API FRD FR-API-106..111, FR-API-135 search):
  * ledger (+CSV), balance, payout address change, notifications, activity, delete test data.
  */
 export const dashboardOps = router<AuthEnv>();
-for (const p of ["/dashboard/ledger", "/dashboard/balance", "/dashboard/payout_address", "/dashboard/notifications", "/dashboard/notifications/*", "/dashboard/activity", "/dashboard/test_data/*"]) {
+for (const p of ["/dashboard/search", "/dashboard/ledger", "/dashboard/balance", "/dashboard/payout_address", "/dashboard/notifications", "/dashboard/notifications/*", "/dashboard/activity", "/dashboard/test_data/*"]) {
   dashboardOps.use(p, sessionAuth());
 }
 
@@ -272,5 +272,68 @@ dashboardOps.openapi(
       await tx`INSERT INTO audit_log (merchant_id, actor, action, target, ip) VALUES (${id}, 'dashboard', 'test_data.deleted', NULL, ${clientIp(c)})`;
     });
     return c.json({ deleted: true as const }, 200);
+  },
+);
+
+// ── FR-API-135: search as you type ──
+
+const SearchRowSchema = z.object({
+  type: z.enum(["product", "customer", "subscription", "event", "endpoint", "checkout_session"]),
+  id: z.string(),
+  label: z.string().openapi({ description: "Product name, customer email, or the id." }),
+  detail: z.string().openapi({ description: "One line of context: rate, status, event type, endpoint host." }),
+});
+export type SearchRow = z.infer<typeof SearchRowSchema>;
+const SEARCH_LIMIT = 5;
+
+/**
+ * At most five rows across the six object types for one merchant and mode. Ids match by prefix
+ * with `left()`, never LIKE, because every id has an underscore. Names and emails match anywhere,
+ * case-insensitively. Nothing here reads a key, a secret blob, or an event payload.
+ */
+export async function searchObjects(merchantId: string, livemode: boolean, q: string): Promise<SearchRow[]> {
+  const n = q.length;
+  const rows = await sql<{ type: SearchRow["type"]; id: string; label: string; detail: string; rank: number }[]>`
+    SELECT * FROM (
+      SELECT 'product' AS type, id, name AS label, '$' || trim(trailing '.' from trim(trailing '0' from rate_usd_per_second::text)) || ' per second' || CASE WHEN active THEN '' ELSE ' · archived' END AS detail, 1 AS rank, created_at
+        FROM products WHERE merchant_id = ${merchantId} AND livemode = ${livemode} AND (left(id, ${n}) = ${q} OR position(lower(${q}) in lower(name)) > 0)
+      UNION ALL
+      SELECT 'customer', id, COALESCE(email, id), CASE WHEN email IS NULL THEN 'no email' ELSE '' END, 2, created_at
+        FROM customers WHERE merchant_id = ${merchantId} AND livemode = ${livemode} AND (left(id, ${n}) = ${q} OR position(lower(${q}) in lower(COALESCE(email, ''))) > 0)
+      UNION ALL
+      SELECT 'subscription', s.id, s.id, s.status || ' · ' || COALESCE(c.email, c.id) || ' · ' || p.name, 3, s.created_at
+        FROM subscriptions s JOIN customers c ON c.id = s.customer_id JOIN products p ON p.id = s.product_id
+        WHERE s.merchant_id = ${merchantId} AND s.livemode = ${livemode} AND left(s.id, ${n}) = ${q}
+      UNION ALL
+      SELECT 'event', id, id, type, 4, created
+        FROM events WHERE merchant_id = ${merchantId} AND livemode = ${livemode} AND left(id, ${n}) = ${q}
+      UNION ALL
+      SELECT 'endpoint', id, id, regexp_replace(url, '^https?://([^/]+).*$', '\\1') || CASE WHEN disabled THEN ' · disabled' ELSE '' END, 5, created_at
+        FROM webhook_endpoints WHERE merchant_id = ${merchantId} AND livemode = ${livemode} AND left(id, ${n}) = ${q}
+      UNION ALL
+      SELECT 'checkout_session', cs.id, cs.id, cs.status || ' · ' || p.name, 6, cs.created_at
+        FROM checkout_sessions cs JOIN products p ON p.id = cs.product_id
+        WHERE cs.merchant_id = ${merchantId} AND cs.livemode = ${livemode} AND left(cs.id, ${n}) = ${q}
+    ) hits
+    ORDER BY rank, created_at DESC
+    LIMIT ${SEARCH_LIMIT}`;
+  return rows.map(({ type, id, label, detail }) => ({ type, id, label, detail }));
+}
+
+dashboardOps.openapi(
+  createRoute({
+    method: "get",
+    path: "/dashboard/search",
+    operationId: "dashboard.search",
+    tags: ["Dashboard"],
+    hide: true,
+    request: { query: z.object({ q: z.string().max(254) }) },
+    responses: { 200: { description: "Up to five matches in the current mode.", content: { "application/json": { schema: z.object({ object: z.literal("list"), data: z.array(SearchRowSchema) }) } } } },
+  }),
+  async (c) => {
+    const auth = c.get("auth");
+    const q = c.req.valid("query").q.trim();
+    if (q.length < 2) throw invalid("Type at least two characters.", "q");
+    return c.json({ object: "list" as const, data: await searchObjects(auth.merchantId, auth.livemode, q) }, 200);
   },
 );

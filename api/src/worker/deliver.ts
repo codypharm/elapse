@@ -3,6 +3,7 @@ import { decryptSecret } from "../lib/crypto";
 import { newId } from "../lib/ids";
 import { signPayload } from "../lib/signature";
 import { webhookUrlProblem } from "../lib/url-safety";
+import { emailNotice, hostOf, writeNotice } from "./notify";
 import type { Job } from "./queue";
 import { MAX_ATTEMPTS, nextAttemptAt } from "./schedule";
 
@@ -68,7 +69,7 @@ export async function attemptDelivery(job: Job, o: AttemptOptions): Promise<Atte
     outcome = next ? "retrying" : "exhausted";
   }
 
-  await sql.begin(async (tx) => {
+  const disabledNotice = await sql.begin(async (tx) => {
     await tx`INSERT INTO delivery_attempts (id, delivery_id, n, sent_at, duration_ms, status_code, error, request_headers, response_excerpt)
              VALUES (${newId("att")}, ${job.id}, ${n}, ${sentAt}, ${durationMs}, ${statusCode}, ${error}, ${headers}, ${excerpt})`;
     await tx`UPDATE deliveries SET status = ${outcome}, attempt = ${n}, locked_until = NULL,
@@ -76,10 +77,13 @@ export async function attemptDelivery(job: Job, o: AttemptOptions): Promise<Atte
              WHERE id = ${job.id}`;
     if (ok) {
       await tx`UPDATE webhook_endpoints SET failing_since = NULL, warned_24h_at = NULL, consecutive_failures = 0, updated_at = now() WHERE id = ${job.endpoint_id}`;
-    } else {
-      await recordFailure(tx, job, sentAt, outcome === "exhausted");
+      await recordFirstDelivery(tx, job);
+      return null;
     }
+    return recordFailure(tx, job, sentAt, outcome === "exhausted");
   });
+  // FR-API-109: the mail goes after the commit so a slow or failing provider never holds the lock.
+  await emailNotice(disabledNotice);
 
   o.log({ delivery_id: job.id, event_id: job.event_id, type: job.type, endpoint_id: job.endpoint_id, n, status_code: statusCode, duration_ms: durationMs, outcome, error });
   return { status: outcome };
@@ -138,6 +142,7 @@ async function manualAttempt(job: Job, o: AttemptOptions, actor: string): Promis
     await tx`INSERT INTO delivery_attempts (id, delivery_id, n, manual, actor, sent_at, duration_ms, status_code, error, request_headers, response_excerpt)
              VALUES (${newId("att")}, ${job.id}, ${n}, true, ${actor}, ${sentAt}, ${durationMs}, ${statusCode}, ${error}, ${headers}, ${excerpt})`;
     await tx`UPDATE deliveries SET locked_until = NULL, updated_at = now() WHERE id = ${job.id}`;
+    if (ok) await recordFirstDelivery(tx, job);
   });
   o.log({ delivery_id: job.id, event_id: job.event_id, type: job.type, endpoint_id: job.endpoint_id, n, status_code: statusCode, duration_ms: durationMs, outcome: ok ? "manual_ok" : "manual_failed", error });
   return { status: "manual", ok };
@@ -161,7 +166,17 @@ async function activeSecrets(job: Job, now: Date): Promise<string[]> {
  * FR-WRK-050: start or extend the failure streak; warn once past 24 h;
  * disable past 3 days with an audit row and a notification.
  */
-async function recordFailure(tx: typeof sql, job: Job, at: Date, exhausted: boolean) {
+/** FR-API-109: the first 2xx in a mode is a notice, once per merchant and mode, whichever endpoint took it. */
+async function recordFirstDelivery(tx: typeof sql, job: Job): Promise<void> {
+  await writeNotice(tx, {
+    merchantId: job.merchant_id, livemode: job.livemode, kind: "first_delivery_succeeded", targetId: job.endpoint_id,
+    dedupeKey: `first_delivery_succeeded:${job.livemode ? "live" : "test"}`,
+    summary: `Your first ${job.livemode ? "live" : "test"} webhook reached ${hostOf(job.url)}. Signed events are flowing.`,
+  });
+}
+
+/** Returns the id of an `endpoint_exhausted` notice written by this failure, for mailing after commit. */
+async function recordFailure(tx: typeof sql, job: Job, at: Date, exhausted: boolean): Promise<string | null> {
   const [ep] = await tx`
     UPDATE webhook_endpoints
     SET failing_since = COALESCE(failing_since, ${at}),
@@ -169,29 +184,24 @@ async function recordFailure(tx: typeof sql, job: Job, at: Date, exhausted: bool
         updated_at = now()
     WHERE id = ${job.endpoint_id}
     RETURNING failing_since, warned_24h_at, disabled, url`;
-  if (!ep || ep.disabled) return;
+  if (!ep || ep.disabled) return null;
   const streakMs = at.getTime() - new Date(ep.failing_since).getTime();
 
   if (streakMs >= DISABLE_AFTER_MS) {
     await tx`UPDATE webhook_endpoints SET disabled = true, disabled_reason = 'auto:failing_3d', updated_at = now() WHERE id = ${job.endpoint_id}`;
     await tx`INSERT INTO audit_log (merchant_id, actor, action, target) VALUES (${job.merchant_id}, 'system:worker', 'webhook_endpoint.auto_disabled', ${job.endpoint_id})`;
-    await tx`INSERT INTO notifications (id, merchant_id, livemode, kind, summary, target_id)
-             VALUES (${newId("ntf")}, ${job.merchant_id}, ${job.livemode}, 'endpoint_exhausted',
-                     ${`Webhook endpoint ${hostOf(ep.url)} stopped retrying after 3 days of failures and was disabled.`}, ${job.endpoint_id})`;
-  } else if (streakMs >= WARN_AFTER_MS && !ep.warned_24h_at) {
+    return writeNotice(tx, {
+      merchantId: job.merchant_id, livemode: job.livemode, kind: "endpoint_exhausted", targetId: job.endpoint_id,
+      summary: `Webhook endpoint ${hostOf(ep.url)} stopped retrying after 3 days of failures and was disabled.`,
+    });
+  }
+  if (streakMs >= WARN_AFTER_MS && !ep.warned_24h_at) {
     await tx`UPDATE webhook_endpoints SET warned_24h_at = ${at}, updated_at = now() WHERE id = ${job.endpoint_id}`;
     await tx`INSERT INTO notifications (id, merchant_id, livemode, kind, summary, target_id)
              VALUES (${newId("ntf")}, ${job.merchant_id}, ${job.livemode}, 'endpoint_failing',
                      ${`Webhook endpoint ${hostOf(ep.url)} has been failing for 24 hours. It will be disabled after 3 days.`}, ${job.endpoint_id})`;
   }
-}
-
-function hostOf(url: string): string {
-  try {
-    return new URL(url).host;
-  } catch {
-    return url;
-  }
+  return null;
 }
 
 function truncateUtf8(s: string, max: number): string {

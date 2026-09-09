@@ -45,6 +45,7 @@ import {
   type Page,
   type PageOptions,
   type Product,
+  type SearchHit,
   type Subscription,
   type WebhookEndpoint,
 } from "./types";
@@ -156,6 +157,8 @@ export interface DashboardApiMore {
   deleteTestData(input: { confirmName: string }, opts?: WriteOpts): Promise<void>;
   /** Top-bar search: an id or email → the page that shows it, or null (FR-DSH-005). */
   resolveSearch(mode: Mode, query: string): Promise<string | null>;
+  /** Results as you type: up to five hits for a partial id, email, or product name in `mode` (FR-DSH-005, FR-API-135). */
+  search(mode: Mode, query: string): Promise<SearchHit[]>;
 }
 
 export type ProductInput = { name: string; rateUsdPerSecond: string; description: string | null; allowPause: boolean };
@@ -1076,6 +1079,24 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
         return wait(c ? `/dashboard/customers/${c.id}` : null);
       }
       return wait(null);
+    },
+
+    async search(mode, query) {
+      const d = dataFor(current().id, mode);
+      const q = query.trim();
+      if (q.length < 2) return wait([]);
+      const lower = q.toLowerCase();
+      const has = (s: string | null | undefined) => (s ?? "").toLowerCase().includes(lower);
+      const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
+      const hits: SearchHit[] = [
+        ...d.products.filter((p) => p.id.startsWith(q) || has(p.name)).map((p): SearchHit => ({ type: "product", id: p.id, label: p.name, detail: `$${p.rateUsdPerSecond} per second${p.status === "archived" ? " · archived" : ""}` })),
+        ...d.customers.filter((c) => c.id.startsWith(q) || has(c.email)).map((c): SearchHit => ({ type: "customer", id: c.id, label: c.email ?? c.id, detail: c.email ? "" : "no email" })),
+        ...d.subscriptions.filter((s) => s.id.startsWith(q)).map((s): SearchHit => ({ type: "subscription", id: s.id, label: s.id, detail: `${s.status} · ${s.customer.email ?? s.customer.id} · ${s.product.name}` })),
+        ...d.events.filter((e) => e.id.startsWith(q)).map((e): SearchHit => ({ type: "event", id: e.id, label: e.id, detail: e.type })),
+        ...d.endpoints.filter((e) => e.id.startsWith(q)).map((e): SearchHit => ({ type: "endpoint", id: e.id, label: e.id, detail: `${host(e.url)}${e.disabled ? " · disabled" : ""}` })),
+        ...d.subscriptions.filter((s) => s.checkoutSession.startsWith(q)).map((s): SearchHit => ({ type: "checkout_session", id: s.checkoutSession, label: s.checkoutSession, detail: `complete · ${s.product.name}` })),
+      ];
+      return wait(hits.slice(0, 5));
     },
 
     async getEvent(id) {

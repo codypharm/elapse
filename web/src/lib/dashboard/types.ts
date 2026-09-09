@@ -271,3 +271,14 @@ export type Overview = {
   running: Subscription[];
   recentEvents: Event[];
 };
+
+/** One row of the top-bar search (FR-DSH-005, API FR-API-135): type word, id, label, one line of context. */
+export type SearchHitType = "product" | "customer" | "subscription" | "event" | "endpoint" | "checkout_session";
+export type SearchHit = {
+  type: SearchHitType;
+  id: string;
+  /** Product name, customer email, or the id. */
+  label: string;
+  /** Rate, status, event type, or endpoint host. */
+  detail: string;
+};

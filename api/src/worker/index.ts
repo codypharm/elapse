@@ -3,6 +3,7 @@ import { keeperForever, KEEPER_CADENCE_S, KEEPER_TICK_MS } from "./keeper";
 import { heartbeatForever } from "./heartbeat";
 import { reconcileForever, RECONCILE_INTERVAL_S } from "./reconcile";
 import { cliExpiryForever } from "../services/cli-stream";
+import { expiryForever } from "./notify";
 import { newId } from "../lib/ids";
 
 /**
@@ -10,7 +11,8 @@ import { newId } from "../lib/ids";
  * from the api/ package). Delivers Events to Merchant endpoints from the
  * Postgres queue, and runs the keeper that asks the chain to settle running streams every
  * KEEPER_CADENCE_S (5 min) and to end capped ones (FR-WRK-070/071), and sweeps CLI Deliveries
- * nobody acked in 10 min to `skipped` (FR-API-134). Env: DATABASE_URL,
+ * nobody acked in 10 min to `skipped` (FR-API-134), and writes key and secret expiry notices with
+ * their emails every minute (FR-WRK-042). Env: DATABASE_URL,
  * WEBHOOK_SECRET_KEK, WORKER_CONCURRENCY, WORKER_BATCH, KEEPER_CADENCE_S, KEEPER_TICK_MS,
  * plus RELAYER_PRIVATE_KEY / MONAD_RPC_URL / CHAIN_ID for the keeper (KEEPER=0 disables it).
  */
@@ -31,5 +33,6 @@ await Promise.all([
 
   heartbeatForever(workerId, () => keeperTick, controller.signal),
   cliExpiryForever(controller.signal, log),
+  expiryForever(controller.signal, log),
 ]);
 console.log("elapse worker stopped");

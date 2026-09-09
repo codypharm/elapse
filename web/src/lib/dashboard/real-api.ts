@@ -11,7 +11,7 @@
 import { DashboardApiError as MockError, type DashboardApi, type WriteOpts } from "./mock-api";
 import { newIdempotencyKey } from "./idempotency";
 import type {
-  ApiKey, Attempt, AuditAction, AuditEntry, Balance, ChecklistState, Customer, Delivery, DeliveryStatus, Event, EventType, Invoice, KeyStatus, LedgerEntry, Merchant, Mode, Notification, NotificationKind, Overview, Product, Subscription, WebhookEndpoint,
+  ApiKey, Attempt, AuditAction, AuditEntry, Balance, ChecklistState, Customer, Delivery, DeliveryStatus, Event, EventType, Invoice, KeyStatus, LedgerEntry, Merchant, Mode, Notification, NotificationKind, Overview, Product, SearchHit, Subscription, WebhookEndpoint,
 } from "./types";
 
 /**
@@ -631,6 +631,14 @@ export function createRealDashboardApi(o: RealDashboardOptions): DashboardApi {
       await call("POST", "/v1/dashboard/test_data/delete", { body: { confirm_name: input.confirmName }, idempotencyKey: idem(opts) });
     },
     // ── search (FR-DSH-005): an id prefix routes to its page; an email to the customer ──
+    // FR-API-135: the route already scopes to the merchant and mode and caps at five.
+    async search(mode, query) {
+      currentMode = mode;
+      const q = query.trim();
+      if (q.length < 2) return [];
+      return (await call<{ data: SearchHit[] }>("GET", `/v1/dashboard/search?q=${encodeURIComponent(q)}`)).data;
+    },
+
     async resolveSearch(mode, query) {
       currentMode = mode;
       const q = query.trim();
