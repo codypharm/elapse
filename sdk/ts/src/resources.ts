@@ -89,7 +89,7 @@ function assertId(id: unknown, prefix: string, name: string): string {
   return id;
 }
 
-function query(params: Record<string, string | number | undefined>): string {
+function query(params: Record<string, string | number | boolean | undefined>): string {
   const q = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined) q.set(k, String(v));
   const s = q.toString();
@@ -115,8 +115,8 @@ export function products(t: Transport) {
         .then(() => assertId(id, "prod", "id"))
         .then((v) => t.request<Product>("GET", `/products/${v}`, undefined, opts));
     },
-    list(params: ListParams = {}, opts?: RequestOptions): Promise<List<Product>> {
-      return t.request<List<Product>>("GET", `/products${query({ limit: params.limit, starting_after: params.startingAfter })}`, undefined, opts);
+    list(params: ListParams & { active?: boolean } = {}, opts?: RequestOptions): Promise<List<Product>> {
+      return t.request<List<Product>>("GET", `/products${query({ active: params.active, limit: params.limit, starting_after: params.startingAfter })}`, undefined, opts);
     },
   };
 }
@@ -180,10 +180,10 @@ export function customers(t: Transport) {
 /** `invoices.list` (FR-SDK-006). */
 export function invoices(t: Transport) {
   return {
-    list(params: ListParams & { subscription?: string; customer?: string } = {}, opts?: RequestOptions): Promise<List<Invoice>> {
+    list(params: ListParams & { subscription?: string; customer?: string; since?: number; until?: number; status?: "paid" | "failed" } = {}, opts?: RequestOptions): Promise<List<Invoice>> {
       return t.request<List<Invoice>>(
         "GET",
-        `/invoices${query({ subscription: params.subscription, customer: params.customer, limit: params.limit, starting_after: params.startingAfter })}`,
+        `/invoices${query({ subscription: params.subscription, customer: params.customer, since: params.since, until: params.until, status: params.status, limit: params.limit, starting_after: params.startingAfter })}`,
         undefined,
         opts,
       );

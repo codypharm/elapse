@@ -86,6 +86,21 @@ describe("FR-API-080 lists", () => {
     const r = await api("GET", "/v1/products", { key: f.skTest });
     expect(r.body.data[0]).toMatchObject({ id: p.id, active: false });
   });
+
+  test("FR_API_011_active_filter_composes_with_the_cursor (amended 2026-09-09 for FR-DSH-126)", async () => {
+    const live = [];
+    for (let i = 0; i < 3; i++) live.push(await create(f.skTest, `live${i}`));
+    const gone = await create(f.skTest, "gone");
+    await api("POST", `/v1/products/${gone.id}`, { key: f.skTest, body: { active: false } });
+    const ids = async (q: string) => (await api("GET", `/v1/products?${q}`, { key: f.skTest })).body.data.map((p: any) => p.id);
+    expect(await ids("active=true")).toEqual(live.map((p) => p.id).reverse());
+    expect(await ids("active=false")).toEqual([gone.id]);
+    expect((await ids("")).length).toBe(4);
+    const page = await api("GET", "/v1/products?active=true&limit=2", { key: f.skTest });
+    expect(page.body.has_more).toBe(true);
+    expect(await ids(`active=true&limit=2&starting_after=${page.body.data[1].id}`)).toEqual([live[0]!.id]);
+    expect((await api("GET", "/v1/products?active=maybe", { key: f.skTest })).status).toBe(400);
+  });
 });
 
 describe("FR-API-011 products.update", () => {

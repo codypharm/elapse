@@ -69,6 +69,10 @@ describe("FR-SDK-002/003 products", () => {
     expect(list.object).toBe("list");
     expect(list.data[0]!.id).toBe(product.id);
     expect(list.has_more).toBe(false);
+    // FR-API-011 amendment 2026-09-09: Stripe's `active` filter.
+    mock.on(() => ({ status: 200, body: { object: "list", data: [], has_more: false, url: "/v1/products" } }));
+    await elapse.products.list({ active: true });
+    expect(mock.seen[0]!.path).toBe("/v1/products?active=true");
   });
 });
 
@@ -114,6 +118,10 @@ describe("FR-SDK-006 customers and invoices", () => {
     mock.on(() => ({ status: 200, body: { object: "list", data: [], has_more: false, url: "/v1/invoices" } }));
     await elapse.invoices.list({ subscription: "sub_1" });
     expect(mock.seen[0]!.path).toBe("/v1/invoices?subscription=sub_1");
+    // FR-API-052 amendment 2026-09-09: date range on settlement time and status.
+    mock.on(() => ({ status: 200, body: { object: "list", data: [], has_more: false, url: "/v1/invoices" } }));
+    await elapse.invoices.list({ since: 1_757_000_000, until: 1_757_100_000, status: "paid", limit: 50 });
+    expect(mock.seen[0]!.path).toBe("/v1/invoices?since=1757000000&until=1757100000&status=paid&limit=50");
   });
 });
 

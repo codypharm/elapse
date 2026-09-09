@@ -55,9 +55,10 @@ export async function findProduct(merchantId: string, livemode: boolean, id: str
 export async function listProducts(
   merchantId: string,
   livemode: boolean,
-  opts: { limit: number; startingAfter?: string | undefined },
+  opts: { limit: number; startingAfter?: string | undefined; active?: boolean | undefined },
 ): Promise<ProductRow[]> {
-  const scope = sql`merchant_id = ${merchantId} AND livemode = ${livemode}`;
+  // `active` (FR-API-011, amended 2026-09-09 for FR-DSH-126): Stripe's `products.list({ active })`.
+  const scope = sql`merchant_id = ${merchantId} AND livemode = ${livemode} AND (${opts.active ?? null}::boolean IS NULL OR active = ${opts.active ?? null})`;
   if (opts.startingAfter) {
     const [cursor] = await sql`SELECT seq FROM products WHERE id = ${opts.startingAfter} AND ${scope}`;
     if (!cursor) throw new CursorNotFound(opts.startingAfter);

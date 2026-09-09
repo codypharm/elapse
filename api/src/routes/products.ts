@@ -147,7 +147,7 @@ products.openapi(
     summary: "List products",
     ...PUBLIC,
     tags: ["Products"],
-    request: { query: ListQuery },
+    request: { query: ListQuery.extend({ active: z.enum(["true", "false"]).optional().openapi({ description: "Only active (true) or only archived (false) Products." }) }) },
     responses: {
       200: { description: "Products, newest first.", content: { "application/json": { schema: ListOf(ProductSchema, "ProductList") } } },
     },
@@ -156,7 +156,7 @@ products.openapi(
     const q = c.req.valid("query");
     const auth = c.get("auth");
     try {
-      const rows = await listProducts(auth.merchantId, auth.livemode, { limit: q.limit, startingAfter: q.starting_after });
+      const rows = await listProducts(auth.merchantId, auth.livemode, { limit: q.limit, startingAfter: q.starting_after, active: q.active === undefined ? undefined : q.active === "true" });
       return c.json(page(rows.map(serializeProduct), q.limit, "/v1/products"), 200);
     } catch (e) {
       if (e instanceof CursorNotFound) throw invalid(e.message, "starting_after");

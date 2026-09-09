@@ -40,14 +40,22 @@ invoices.openapi(
     summary: "List invoices",
     ...PUBLIC,
     tags: ["Invoices"],
-    request: { query: ListQuery.extend({ subscription: z.string().optional(), customer: z.string().optional() }) },
+    request: {
+      query: ListQuery.extend({
+        subscription: z.string().optional(),
+        customer: z.string().optional(),
+        since: z.coerce.number().int().optional().openapi({ description: "Settled at or after this unix time (period_end)." }),
+        until: z.coerce.number().int().optional().openapi({ description: "Settled at or before this unix time (period_end)." }),
+        status: z.enum(["paid", "failed"]).optional(),
+      }),
+    },
     responses: { 200: { description: "Invoices, newest first.", content: { "application/json": { schema: ListOf(InvoiceSchema, "InvoiceList") } } } },
   }),
   async (c) => {
     const q = c.req.valid("query");
     const auth = c.get("auth");
     try {
-      const rows = await listInvoices(auth.merchantId, auth.livemode, { limit: q.limit, startingAfter: q.starting_after, subscription: q.subscription, customer: q.customer });
+      const rows = await listInvoices(auth.merchantId, auth.livemode, { limit: q.limit, startingAfter: q.starting_after, subscription: q.subscription, customer: q.customer, since: q.since, until: q.until, status: q.status });
       return c.json(page(rows.map(serializeInvoice), q.limit, "/v1/invoices"), 200);
     } catch (e) {
       if (e instanceof CursorNotFound) throw invalid(e.message, "starting_after");

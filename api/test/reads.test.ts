@@ -95,4 +95,19 @@ describe("FR-API-052 invoices", () => {
     expect((await api("GET", `/v1/invoices?limit=1`, { key: m.skTest })).body.has_more).toBe(true);
     expect((await api("GET", `/v1/invoices/${f.i1.id}`, { key: m.skLive })).status).toBe(404);
   });
+
+  it("FR_API_052_since_until_on_period_end_and_status_filter_compose_with_the_cursor", async () => {
+    const f = await seed();
+    await insertInvoice({ merchantId: m.merchantId, livemode: false, subscriptionId: f.s1.id, customerId: f.a.id, periodStart: T0 + 600, periodEnd: T0 + 600, seconds: 0, amountWei: 0n, feeWei: 0n, status: "failed", txHash: "0x" + "3".repeat(64), logIndex: 1, chainEventId: null });
+    const ids = async (q: string) => (await api("GET", `/v1/invoices?${q}`, { key: m.skTest })).body.data.map((i: any) => i.id);
+    expect(await ids(`since=${T0 + 301}`)).toEqual(expect.arrayContaining([f.i2.id]));
+    expect(await ids(`since=${T0 + 301}`)).not.toContain(f.i1.id);
+    expect(await ids(`until=${T0 + 300}`)).toEqual([f.i1.id]);
+    expect(await ids(`status=paid`)).toEqual([f.i2.id, f.i1.id]);
+    expect(await ids(`status=failed`)).toHaveLength(1);
+    const page = await api("GET", `/v1/invoices?status=paid&limit=1`, { key: m.skTest });
+    expect(page.body.has_more).toBe(true);
+    expect(await ids(`status=paid&limit=1&starting_after=${page.body.data[0].id}`)).toEqual([f.i1.id]);
+    expect((await api("GET", `/v1/invoices?status=bogus`, { key: m.skTest })).status).toBe(400);
+  });
 });

@@ -89,10 +89,14 @@ export async function findInvoice(merchantId: string, livemode: boolean, id: str
 export async function listInvoices(
   merchantId: string,
   livemode: boolean,
-  opts: { limit: number; startingAfter?: string | undefined; subscription?: string | undefined; customer?: string | undefined },
+  opts: { limit: number; startingAfter?: string | undefined; subscription?: string | undefined; customer?: string | undefined; since?: number | undefined; until?: number | undefined; status?: "paid" | "failed" | undefined },
 ): Promise<InvoiceRow[]> {
   const filters = [];
   if (opts.subscription) filters.push(sql`subscription_id = ${opts.subscription}`);
   if (opts.customer) filters.push(sql`customer_id = ${opts.customer}`);
+  // FR-API-052 (amended 2026-09-09 for FR-DSH-126): the dashboard's date range and status filters run here, not in the browser.
+  if (opts.since !== undefined) filters.push(sql`period_end >= to_timestamp(${opts.since})`);
+  if (opts.until !== undefined) filters.push(sql`period_end <= to_timestamp(${opts.until})`);
+  if (opts.status) filters.push(sql`status = ${opts.status}`);
   return keysetList<InvoiceRow>("invoices", COLS, sql`merchant_id = ${merchantId} AND livemode = ${livemode}`, filters, opts);
 }

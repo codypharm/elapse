@@ -48,6 +48,37 @@ describe("FR-API-107 ledger", () => {
     expect((await dash("GET", "/v1/dashboard/ledger?subscription=sub_nope")).body.data).toHaveLength(0);
   });
 
+  it("FR_API_080_pages_with_starting_after_and_has_more_and_the_summary_covers_the_whole_range", async () => {
+    const now = await ledgerFixture();
+    for (let i = 5; i <= 12; i++) {
+      await sql`INSERT INTO ledger_entries (id, merchant_id, livemode, kind, amount_wei, from_address, to_address, subscription_id, customer_id, chain_id, tx_hash, log_index, block_hash, block_timestamp)
+                VALUES (${"led_" + i}, ${m.merchantId}, false, 'settlement', 1000, '0xa', '0xb', 'sub_1', 'cus_1', 10143, ${"0xled_" + i}, ${i}, '0xh', ${now - 50})`;
+    }
+    const p1 = await dash("GET", "/v1/dashboard/ledger?limit=5");
+    expect(p1.status).toBe(200);
+    expect(p1.body).toMatchObject({ object: "list", has_more: true, url: "/v1/dashboard/ledger" });
+    expect(p1.body.data).toHaveLength(5);
+    expect(p1.body.data[0].id).toBe("led_12");
+    // Totals are for the filtered range, not the page: 8 × 0.001 + 0.8712 settled.
+    expect(p1.body.summary.settlement).toBe("0.8792");
+    const p2 = await dash("GET", `/v1/dashboard/ledger?limit=5&starting_after=${p1.body.data[4].id}`);
+    expect(p2.body.data).toHaveLength(5);
+    expect(p2.body.data[0].id).toBe("led_7");
+    expect(p2.body.has_more).toBe(true);
+    const p3 = await dash("GET", `/v1/dashboard/ledger?limit=5&starting_after=${p2.body.data[4].id}`);
+    expect(p3.body.data.map((e: any) => e.id)).toEqual(["led_2", "led_1"]);
+    expect(p3.body.has_more).toBe(false);
+    expect((await dash("GET", "/v1/dashboard/ledger")).body.data).toHaveLength(10); // default 10 (FR-API-080)
+    expect((await dash("GET", "/v1/dashboard/ledger?limit=101")).status).toBe(400);
+    const bad = await dash("GET", "/v1/dashboard/ledger?starting_after=led_nope");
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.param).toBe("starting_after");
+    // The cursor composes with a filter.
+    const f = await dash("GET", "/v1/dashboard/ledger?kind=settlement&limit=3");
+    expect(f.body.has_more).toBe(true);
+    expect((await dash("GET", `/v1/dashboard/ledger?kind=settlement&limit=100&starting_after=${f.body.data[2].id}`)).body.data).toHaveLength(6);
+  });
+
   it("CSV has the same rows and columns", async () => {
     await ledgerFixture();
     const { app } = await import("../src/app");
@@ -57,6 +88,19 @@ describe("FR-API-107 ledger", () => {
     expect(lines[0]).toBe("id,kind,amount_usd,subscription,customer,customer_email,tx_hash,log_index,block_timestamp,reversed_by");
     expect(lines).toHaveLength(5);
     expect(lines[1]).toContain("led_4,refund,13.52,sub_1,cus_1,ann@x.test,0xled_4");
+  });
+
+  it("CSV covers the whole filtered range, not one page", async () => {
+    const now = await ledgerFixture();
+    for (let i = 5; i <= 30; i++) {
+      await sql`INSERT INTO ledger_entries (id, merchant_id, livemode, kind, amount_wei, from_address, to_address, subscription_id, customer_id, chain_id, tx_hash, log_index, block_hash, block_timestamp)
+                VALUES (${"led_" + i}, ${m.merchantId}, false, 'settlement', 1000, '0xa', '0xb', 'sub_1', 'cus_1', 10143, ${"0xled_" + i}, ${i}, '0xh', ${now - 50})`;
+    }
+    const { app } = await import("../src/app");
+    const text = await (await app.request("/v1/dashboard/ledger?format=csv", { headers: H() })).text();
+    expect(text.trim().split("\n")).toHaveLength(31);
+    const fees = await (await app.request("/v1/dashboard/ledger?format=csv&kind=fee", { headers: H() })).text();
+    expect(fees.trim().split("\n")).toHaveLength(2);
   });
 });
 

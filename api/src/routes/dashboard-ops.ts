@@ -31,16 +31,49 @@ const LedgerRow = z.object({
   block_timestamp: z.number().int(), reversed_by: z.string().nullable(), livemode: z.boolean(),
 });
 
-async function ledgerRows(merchantId: string, livemode: boolean, q: { kind?: string | undefined; subscription?: string | undefined; from?: number | undefined; to?: number | undefined; limit: number }) {
-  return sql`
-    SELECT l.id, l.kind, l.amount_wei::text AS amount_wei, l.subscription_id, l.customer_id, c.email AS customer_email, l.tx_hash, l.log_index, l.block_timestamp, l.reversed_by, l.livemode
-    FROM ledger_entries l LEFT JOIN customers c ON c.id = l.customer_id
-    WHERE l.merchant_id = ${merchantId} AND l.livemode = ${livemode}
+/** FR-API-107 CSV: full range, capped so one request cannot pull the table unbounded. */
+const LEDGER_CSV_MAX_ROWS = 10_000;
+
+type LedgerFilter = { kind?: string | undefined; subscription?: string | undefined; from?: number | undefined; to?: number | undefined };
+
+/** The filter as one reusable predicate fragment (merchant, mode, kind, subscription, range). */
+function ledgerWhere(merchantId: string, livemode: boolean, q: LedgerFilter) {
+  return sql`l.merchant_id = ${merchantId} AND l.livemode = ${livemode}
       AND (${q.kind ?? null}::text IS NULL OR l.kind = ${q.kind ?? null})
       AND (${q.subscription ?? null}::text IS NULL OR l.subscription_id = ${q.subscription ?? null})
       AND (${q.from ?? null}::bigint IS NULL OR l.block_timestamp >= ${q.from ?? null})
-      AND (${q.to ?? null}::bigint IS NULL OR l.block_timestamp <= ${q.to ?? null})
-    ORDER BY l.seq DESC LIMIT ${q.limit}`;
+      AND (${q.to ?? null}::bigint IS NULL OR l.block_timestamp <= ${q.to ?? null})`;
+}
+
+/**
+ * One page, newest first, FR-API-080 style: `limit + 1` rows so the caller knows `has_more`;
+ * `startingAfter` is a ledger id whose `seq` bounds the page. Unknown cursor → `invalid`.
+ */
+async function ledgerRows(merchantId: string, livemode: boolean, q: LedgerFilter & { limit: number; startingAfter?: string | undefined }) {
+  let afterSeq: string | null = null;
+  if (q.startingAfter) {
+    const [cursor] = await sql`SELECT seq::text AS seq FROM ledger_entries l WHERE l.id = ${q.startingAfter} AND l.merchant_id = ${merchantId} AND l.livemode = ${livemode}`;
+    if (!cursor) throw invalid(`No such ledger entry: '${q.startingAfter}'`, "starting_after");
+    afterSeq = cursor.seq as string;
+  }
+  return sql`
+    SELECT l.id, l.kind, l.amount_wei::text AS amount_wei, l.subscription_id, l.customer_id, c.email AS customer_email, l.tx_hash, l.log_index, l.block_timestamp, l.reversed_by, l.livemode
+    FROM ledger_entries l LEFT JOIN customers c ON c.id = l.customer_id
+    WHERE ${ledgerWhere(merchantId, livemode, q)}
+      AND (${afterSeq}::bigint IS NULL OR l.seq < ${afterSeq}::bigint)
+    ORDER BY l.seq DESC LIMIT ${q.limit + 1}`;
+}
+
+/** Per-kind totals over the whole filtered range (live rows only), independent of the page. */
+async function ledgerSummary(merchantId: string, livemode: boolean, q: LedgerFilter): Promise<Record<string, string>> {
+  const rows = await sql`SELECT l.kind, COALESCE(SUM(l.amount_wei), 0)::text AS total FROM ledger_entries l
+                         WHERE ${ledgerWhere(merchantId, livemode, q)} AND l.reversed_by IS NULL GROUP BY l.kind`;
+  const summary: Record<string, string> = {};
+  for (const kind of ["deposit", "settlement", "fee", "refund"]) {
+    const hit = (rows as any[]).find((r) => r.kind === kind);
+    summary[kind] = usd(hit ? BigInt(hit.total) : 0n);
+  }
+  return summary;
 }
 
 dashboardOps.openapi(
@@ -56,19 +89,24 @@ dashboardOps.openapi(
         subscription: z.string().optional(),
         from: z.coerce.number().int().optional(),
         to: z.coerce.number().int().optional(),
-        limit: z.coerce.number().int().min(1).max(1000).default(200),
+        limit: z.coerce.number().int().min(1).max(100).default(10),
+        starting_after: z.string().optional(),
         format: z.enum(["json", "csv"]).default("json"),
       }),
     },
     responses: {
-      200: { description: "Money movements newest first, with per-kind totals for the filtered range (live rows only).", content: { "application/json": { schema: z.object({ object: z.literal("list"), data: z.array(LedgerRow), summary: z.record(z.string(), z.string()) }) }, "text/csv": { schema: z.string() } } },
+      200: { description: "Money movements newest first, paged per FR-API-080, with per-kind totals for the whole filtered range (live rows only).", content: { "application/json": { schema: z.object({ object: z.literal("list"), data: z.array(LedgerRow), has_more: z.boolean(), url: z.string(), summary: z.record(z.string(), z.string()) }) }, "text/csv": { schema: z.string() } } },
     },
   }),
   async (c) => {
     const auth = c.get("auth");
     const q = c.req.valid("query");
-    const rows = await ledgerRows(auth.merchantId, auth.livemode, q);
-    const data = (rows as any[]).map((r) => ({
+    // CSV is the whole filtered range (capped), never a page: a download that stops at 10 rows is a trap.
+    const limit = q.format === "csv" ? LEDGER_CSV_MAX_ROWS : q.limit;
+    const page = await ledgerRows(auth.merchantId, auth.livemode, { ...q, limit, startingAfter: q.format === "csv" ? undefined : q.starting_after });
+    const hasMore = page.length > limit;
+    const rows = hasMore ? (page as any[]).slice(0, limit) : (page as any[]);
+    const data = rows.map((r) => ({
       id: r.id, object: "ledger_entry" as const, kind: r.kind, amount_usd: usd(r.amount_wei), subscription: r.subscription_id, customer: r.customer_id,
       customer_email: r.customer_email, tx_hash: r.tx_hash, log_index: r.log_index, block_timestamp: Number(r.block_timestamp), reversed_by: r.reversed_by, livemode: r.livemode,
     }));
@@ -78,12 +116,8 @@ dashboardOps.openapi(
       const csv = [cols.join(","), ...data.map((r) => cols.map((k) => csvCell(r[k], { numeric: k === "amount_usd" })).join(","))].join("\n") + "\n";
       return c.body(csv, 200, { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="elapse-ledger-${auth.livemode ? "live" : "test"}.csv"` });
     }
-    const summary: Record<string, string> = {};
-    for (const kind of ["deposit", "settlement", "fee", "refund"]) {
-      const total = rows.filter((r: any) => r.kind === kind && r.reversed_by === null).reduce((a: bigint, r: any) => a + BigInt(r.amount_wei), 0n);
-      summary[kind] = usd(total);
-    }
-    return c.json({ object: "list" as const, data, summary }, 200);
+    const summary = await ledgerSummary(auth.merchantId, auth.livemode, q);
+    return c.json({ object: "list" as const, data, has_more: hasMore, url: "/v1/dashboard/ledger", summary }, 200);
   },
 );
 

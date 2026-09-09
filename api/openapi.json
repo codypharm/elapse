@@ -126,6 +126,20 @@
             "description": "Id of the last object on the previous page.",
             "name": "starting_after",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Only active (true) or only archived (false) Products."
+            },
+            "required": false,
+            "description": "Only active (true) or only archived (false) Products.",
+            "name": "active",
+            "in": "query"
           }
         ],
         "responses": {
@@ -676,6 +690,40 @@
             },
             "required": false,
             "name": "customer",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "description": "Settled at or after this unix time (period_end)."
+            },
+            "required": false,
+            "description": "Settled at or after this unix time (period_end).",
+            "name": "since",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "nullable": true,
+              "description": "Settled at or before this unix time (period_end)."
+            },
+            "required": false,
+            "description": "Settled at or before this unix time (period_end).",
+            "name": "until",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "paid",
+                "failed"
+              ]
+            },
+            "required": false,
+            "name": "status",
             "in": "query"
           }
         ],
