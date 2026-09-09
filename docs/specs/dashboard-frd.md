@@ -1,6 +1,6 @@
 # Merchant dashboard (`/dashboard/*`) — FRD
 
-Status: **Signed 2026-09-03 (William); FR-DSH-015/075 signed 2026-09-07 (William); FR-DSH-114–118 and the FR-DSH-103 amendment signed 2026-09-07 (William)** — approved after review; seventeen grill-me decisions recorded above. May be revisited. · Surface: Operate (merchant, desktop-first, reads on mobile) · Sources: design brief Surface 3; detailed doc §3, §5.2, §8, §12 Week 4; `api-frd.md`, `worker-frd.md`, `contracts-frd.md`; grill-me 2026-09-03.
+Status: **Signed 2026-09-03 (William); FR-DSH-015/075 signed 2026-09-07 (William); FR-DSH-114–118 and the FR-DSH-103 amendment signed 2026-09-07 (William); FR-DSH-093 and the FR-DSH-023/090 amendments signed 2026-09-09 (William)** — approved after review; seventeen grill-me decisions recorded above. May be revisited. · Surface: Operate (merchant, desktop-first, reads on mobile) · Sources: design brief Surface 3; detailed doc §3, §5.2, §8, §12 Week 4; `api-frd.md`, `worker-frd.md`, `contracts-frd.md`; grill-me 2026-09-03.
 
 ## Problem
 
@@ -97,7 +97,7 @@ Scope note (2026-09-03): decisions 11–17 added the ledger, notifications, and 
 | FR-DSH-020 | Until the merchant has, in the current mode, ≥ 1 product, ≥ 1 secret key, ≥ 1 webhook endpoint, and ≥ 1 succeeded delivery, Home shows the four-step checklist. Each step links to its page and ticks itself from real data. Step 4 shows a copyable `curl`/SDK snippet that creates a checkout session. | Mock states: 0/4 … 4/4; checklist disappears at 4/4. |
 | FR-DSH-021 | Overview (after the checklist): stat tiles for meters running now, accrued today, settled this week (net of fee), and failed payments this week. Numbers use tabular numerals; period labels are explicit. | Snapshot with mock data; tiles reflect mode. |
 | FR-DSH-022 | "Running now" list: up to 10 active subscriptions with product, customer, and an inline `Readout` (tiny) ticking from `rate × (now − started_at)`; link to the subscription. | Uses `useMeter`; values match `accruedNano`. |
-| FR-DSH-023 | Recent events: last 10 events with type, object id, time, and delivery state (pending / delivered / failed); links to the event. | Render test. |
+| FR-DSH-023 | Recent events: last 10 events with type, object id, the FR-DSH-093 context line (amount dropped, truncated to one line), time, and delivery state (pending / delivered / failed); links to the event. | Render test; context line truncates and carries no amount. |
 
 ### Products (design brief 3.4)
 
@@ -159,8 +159,9 @@ Scope note (2026-09-03): decisions 11–17 added the ledger, notifications, and 
 
 | Id | Requirement | Acceptance |
 | --- | --- | --- |
-| FR-DSH-090 | Event log: type, object id, created, pending-webhooks count. Filter by type (catalog) and date. | Table test. |
+| FR-DSH-090 | Event log: type, object id, the FR-DSH-093 context line, created, pending-webhooks count. Filter by type (catalog) and date. | Table test; context line present. |
 | FR-DSH-091 | Event detail: full payload in a JSON viewer with Copy, and the deliveries this event produced with links to their endpoints. | Render test. |
+| FR-DSH-093 | **Event context line** (William, 2026-09-09): every event row on the home feed (FR-DSH-023), the event log (FR-DSH-090) and the event detail under its title (FR-DSH-091) shows one line from the API's dashboard-only `context` field (FR-API-136): product name · customer email, or the customer's short `cus_` id when it has no email; invoice events append ` · $amount_settled` (what the customer paid, matching the receipt copy). The home feed drops the amount and truncates to one line with an ellipsis; the log and the detail show the full line. When `context` is null (product deleted, unresolvable object) the row renders exactly as before, id only. No product filter on events; filtering by product stays on Subscriptions (FR-DSH-040). | Mock rows render all three shapes (email, no-email id, invoice with amount); home feed truncates and omits the amount; detail shows the line; null context renders the id alone. |
 
 ### Settings (design brief 3.11; decisions 3, 4)
 
@@ -330,3 +331,6 @@ Second round ("we missed something"):
 | 2026-09-09 | Claude (for William) | Built FR-DSH-126: `use-paged-list.ts` (page one polled, Load more by cursor, page-one rows carried across a refresh so none fall between pages), `load-more.tsx`; all seven lists moved over, each with a 120-row page test. Ledger totals come from the API's range summary; invoice totals and both CSV exports cover loaded rows and say "of N shown". Server-side filters added for invoices (FR-API-052) and products (FR-API-011) so filters hold across pages. |
 | 2026-09-09 | William | Signed the FR-DSH-005 amendment (search as you type; ADR 2026-09-09). |
 | 2026-09-09 | Claude (for William) | Built the FR-DSH-005 amendment: `search-box.tsx` is a combobox with a listbox (200 ms debounce after two characters, five rows with label, type word and one line of context, arrows/Enter/Esc/click, stale answers dropped, "No match in test mode" inline); `lib/dashboard/search.ts` maps a hit to its page; mock `search()` mirrors FR-API-135. Checked at 375 px in the drawer and at 1280 px. |
+| 2026-09-09 | Claude (for William) | FR-DSH-093 event context line and the FR-DSH-023/090 amendments, from William's note that event rows show only an id (grill-me: API resolves names, dashboard-session only, `amount_settled` on invoices, home feed truncates). Awaiting William's signature. |
+| 2026-09-09 | William | Signed FR-DSH-093 and the FR-DSH-023/090 amendments. |
+| 2026-09-09 | Claude (for William) | Built FR-DSH-093: `lib/dashboard/event-context.ts` (`eventContextLine`, unit-tested for email, short-id fallback, invoice amount, `amount: false`, null) shared by `events-list.tsx`, the home feed and `event-detail.tsx`; `real-api.ts` maps the wire `context`; the mock seeds one per meter and none on test events. Verified at 1440 and 375 against the mock. |

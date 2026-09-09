@@ -154,6 +154,18 @@ export type Event = {
   /** Rolled up from this event's deliveries. */
   deliveryState: DeliveryState;
   payload: Record<string, unknown>;
+  /** FR-DSH-093: product and customer resolved by the API for dashboard sessions; null when nothing resolves. */
+  context?: EventContext | null;
+};
+
+/** The dashboard-only `context` on an event (FR-API-136). */
+export type EventContext = {
+  productName: string;
+  /** The `cus_` id, shown short when the customer has no email. */
+  customer: string;
+  customerEmail: string | null;
+  /** Invoice events only: what the customer paid for the period, as a decimal USD string. */
+  amountSettled?: string;
 };
 
 export type WebhookEndpoint = {

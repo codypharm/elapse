@@ -54,7 +54,9 @@ type WireKey = { id: string; kind: "sk" | "pk"; name: string; livemode: boolean;
 type WireEndpoint = { id: string; url: string; events: string[]; disabled: boolean; livemode: boolean; created: number; previous_secret_expires_at: number | null; success_rate_7d: number; secret?: string };
 type WireAttempt = { n: number; manual: boolean; actor: string | null; sent_at: number; duration_ms: number | null; status_code: number | null; error: string | null; request_headers: Record<string, string>; response_excerpt: string | null };
 type WireDelivery = { id: string; event: string; endpoint: string; status: "queued" | "retrying" | "succeeded" | "exhausted" | "skipped"; attempt: number; next_attempt_at: number | null; livemode: boolean; created: number; resend_requested: boolean; max_attempts: number; event_type: string; event_created: number; endpoint_url: string; endpoint_disabled?: boolean; attempts_made?: number; last_attempt?: WireAttempt | null; attempts?: WireAttempt[] };
-type WireEvent = { id: string; type: EventType; created: number; livemode: boolean; data: { object: Record<string, unknown> }; pending_webhooks: number; object_id: string | null; delivery_state: "pending" | "delivered" | "failed"; deliveries?: WireDelivery[] };
+/** FR-API-136: present only on dashboard-session reads. */
+type WireEventContext = { product_name: string; customer: string; customer_email: string | null; amount_settled?: string };
+type WireEvent = { id: string; type: EventType; created: number; livemode: boolean; data: { object: Record<string, unknown> }; pending_webhooks: number; object_id: string | null; delivery_state: "pending" | "delivered" | "failed"; context?: WireEventContext | null; deliveries?: WireDelivery[] };
 type WireProduct = { id: string; name: string; description: string | null; rate_usd_per_second: string; allow_pause: boolean; active: boolean; livemode: boolean; created: number; active_subscriptions: number };
 type WireSubscription = {
   id: string; status: Subscription["status"]; product: string; customer: string; checkout_session: string | null; rate_usd_per_second: string;
@@ -178,6 +180,9 @@ export function mapEvent(w: WireEvent): Event {
     pendingWebhooks: w.pending_webhooks,
     deliveryState: w.delivery_state,
     payload: w.data.object,
+    ...(w.context === undefined
+      ? {}
+      : { context: w.context && { productName: w.context.product_name, customer: w.context.customer, customerEmail: w.context.customer_email, ...(w.context.amount_settled ? { amountSettled: w.context.amount_settled } : {}) } }),
   };
 }
 

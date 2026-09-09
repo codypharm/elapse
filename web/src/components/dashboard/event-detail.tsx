@@ -1,9 +1,10 @@
 /**
  * `EventDetail` — the right pane of Events: the full payload as JSON with
  * Copy, and the deliveries this event produced with links to their
- * endpoints.
+ * endpoints. Under the title, the FR-DSH-093 context line (product · customer ·
+ * amount) when the API resolved one.
  *
- * Maps to: FR-DSH-091.
+ * Maps to: FR-DSH-091, FR-DSH-093.
  */
 "use client";
 
@@ -11,6 +12,7 @@ import Link from "next/link";
 import { useCallback } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CodeBlock } from "@/components/site/code-block";
+import { eventContextLine } from "@/lib/dashboard/event-context";
 import { clock } from "@/lib/dashboard/format";
 import { DashboardApiError } from "@/lib/dashboard/mock-api";
 import { usePoll } from "@/lib/dashboard/use-poll";
@@ -41,9 +43,11 @@ export function EventDetail({ eventId }: { eventId: string }) {
   }
   const { event, deliveries } = data;
   const json = JSON.stringify(event.payload, null, 2);
+  const context = eventContextLine(event);
   return (
     <div className="px-5 py-6 md:px-8">
       <h2 className="numerals text-[1.125rem] font-medium tracking-[-0.01em]">{event.type}</h2>
+      {context && <p className="mt-1 text-[13px]">{context}</p>}
       <p className="numerals mt-1 text-[12px] text-ink-soft">
         {event.id} · {clock(event.createdAt)}
         {event.pendingWebhooks > 0 && (

@@ -710,6 +710,7 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
           pendingWebhooks: 0,
           deliveryState: "delivered",
           payload: { test: true, subscription: "sub_test", seconds_elapsed: 83, amount_settled: "0.33" },
+          context: null, // a test event names no real meter (FR-DSH-093)
         };
         data.events.unshift(event);
         const delivery = deliverEvent(event, endpoint, t, newId, "succeed");
@@ -866,6 +867,7 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
             pendingWebhooks: 0,
             deliveryState: "delivered",
             payload: { subscription: sub.id, seconds: inv.seconds, amount_settled: inv.grossUsd },
+            context: { productName: sub.product.name, customer: sub.customer.id, customerEmail: sub.customer.email, amountSettled: inv.grossUsd },
           });
         }
         sub.status = "canceled";
@@ -886,6 +888,7 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
           pendingWebhooks: 0,
           deliveryState: "delivered",
           payload: { subscription: sub.id, seconds_elapsed: seconds, amount_settled: receipt.amountSettledUsd, canceled_by: "merchant" },
+          context: { productName: sub.product.name, customer: sub.customer.id, customerEmail: sub.customer.email },
         });
         const product = data.products.find((p) => p.id === sub.product.id);
         if (product && product.activeSubscriptions > 0) product.activeSubscriptions--;

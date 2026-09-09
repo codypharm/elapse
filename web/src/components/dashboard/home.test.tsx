@@ -69,6 +69,18 @@ describe("Home", () => {
     expect(within(recent).getAllByRole("listitem").length).toBeGreaterThan(0);
   });
 
+  it("recent events carry product · customer, without the amount (FR-DSH-093)", async () => {
+    const m = await signIn(api, "demo@elapse.finance");
+    mount(api, m);
+    const recent = await screen.findByRole("list", { name: /recent events/i });
+    const events = (await api.overview("test")).recentEvents;
+    const invoice = events.find((e) => e.type === "invoice.settled" && e.context?.customerEmail);
+    const any = events.find((e) => e.context?.customerEmail)!;
+    const row = (id: string) => within(recent).getAllByRole("link").find((l) => l.getAttribute("href")?.endsWith(id))!;
+    expect(row(any.id)).toHaveTextContent(`${any.context!.productName} · ${any.context!.customerEmail}`);
+    if (invoice) expect(row(invoice.id).textContent).not.toContain(`$${invoice.context!.amountSettled}`);
+  });
+
   it("scopes the overview by mode (FR-DSH-004)", async () => {
     const m = await signIn(api, "demo@elapse.finance");
     setMode("live");

@@ -51,7 +51,7 @@ dashboardOverview.openapi(
         settled_week_net_usd: baseUnitsToDecimal(o.settled_week_net_wei, d),
         failed_payments_week: o.failed_payments_week,
         running: o.running.map((s) => serializeSubscription(s, Math.floor(now.getTime() / 1000))),
-        recent_events: events.slice(0, 10).map(serializeEventForRead),
+        recent_events: events.slice(0, 10).map((e) => serializeEventForRead(e, true)), // cookie route: context always (FR-API-136)
         as_of: Math.floor(now.getTime() / 1000),
       },
       200,

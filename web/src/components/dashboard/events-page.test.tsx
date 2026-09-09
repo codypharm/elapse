@@ -55,6 +55,25 @@ describe("Events", () => {
     });
   });
 
+  it("shows product · customer under each row, with the amount on invoice rows; a test event stays id-only (FR-DSH-093)", async () => {
+    const m = await signIn(api);
+    // A test event resolves no meter, so its row must stay the old id-only shape.
+    const ep = (await api.listEndpoints("test"))[0]!;
+    await api.sendTestEvent(ep.id, "subscription.canceled");
+    mount(api, m, <EventsList />);
+    const list = await screen.findByRole("list", { name: /^events$/i });
+    const events = (await api.listEvents("test", {})).data;
+    const test = events[0]!;
+    expect(test.context).toBeNull();
+    const withEmail = events.find((e) => e.context?.customerEmail && e.type === "subscription.created")!;
+    const invoice = events.find((e) => e.type === "invoice.settled" && e.context?.customerEmail)!;
+    const row = (e: Event) => within(list).getByRole("link", { name: new RegExp(e.id) });
+    expect(row(withEmail)).toHaveTextContent(`${withEmail.context!.productName} · ${withEmail.context!.customerEmail}`);
+    expect(row(invoice)).toHaveTextContent(`${invoice.context!.productName} · ${invoice.context!.customerEmail} · $${invoice.context!.amountSettled}`);
+    expect(row(test)).toHaveTextContent(`${test.id} · ${test.objectId}`);
+    expect(row(test).textContent).not.toContain(" · $");
+  });
+
   it("marks the selected event in the list", async () => {
     const m = await signIn(api);
     const first = (await api.listEvents("test", {})).data[0]!;
@@ -77,6 +96,14 @@ describe("Events", () => {
     const expected = (await api.getEvent(ev.id)).deliveries;
     expect(within(deliveries).getAllByRole("listitem")).toHaveLength(expected.length);
     for (const d of expected) expect(within(deliveries).getByRole("link", { name: new RegExp(d.endpoint.url) })).toBeInTheDocument();
+  });
+
+  it("the detail shows the context line under the title (FR-DSH-093)", async () => {
+    const m = await signIn(api);
+    const ev = (await api.listEvents("test", { type: "invoice.settled" })).data.find((e) => e.context?.customerEmail)!;
+    mount(api, m, <EventDetail eventId={ev.id} />);
+    await screen.findByRole("heading", { name: ev.type });
+    expect(screen.getByText(`${ev.context!.productName} · ${ev.context!.customerEmail} · $${ev.context!.amountSettled}`)).toBeInTheDocument();
   });
 
   it("names a missing event", async () => {

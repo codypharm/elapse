@@ -1,6 +1,8 @@
 /**
  * `EventsList` — the left pane of `/dashboard/developers/events`: every
- * event in the current mode, newest first, with a type filter. The active
+ * event in the current mode, newest first, with a type filter; each row carries
+ * the FR-DSH-093 context line (product · customer · amount) when the API resolved
+ * one. The active
  * row follows the route.
  *
  * Maps to: FR-DSH-090, FR-DSH-007.
@@ -13,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { timeAgo } from "@/lib/dashboard/format";
 import { useMode } from "@/lib/dashboard/mode";
+import { eventContextLine } from "@/lib/dashboard/event-context";
 import { EVENT_TYPES, type Event, type EventType } from "@/lib/dashboard/types";
 import { usePagedList } from "@/lib/dashboard/use-paged-list";
 import { cn } from "@/lib/utils";
@@ -73,6 +76,7 @@ export function EventsList() {
           {paged.rows.map((e) => {
             const href = `/dashboard/developers/events/${e.id}`;
             const current = pathname === href;
+            const context = eventContextLine(e);
             return (
               <li key={e.id}>
                 <Link
@@ -89,6 +93,7 @@ export function EventsList() {
                     <span className="numerals block text-[12px] text-ink-soft [overflow-wrap:anywhere]">
                       {e.id} · {e.objectId}
                     </span>
+                    {context && <span className="block truncate text-[12px] text-ink-soft">{context}</span>}
                   </span>
                   <span className="flex items-center gap-3 sm:contents">
                     <span

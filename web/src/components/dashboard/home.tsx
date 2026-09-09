@@ -16,11 +16,17 @@ import { ArrowRight, Check } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CodeBlock } from "@/components/site/code-block";
+import { eventContextLine } from "@/lib/dashboard/event-context";
 import { timeAgo } from "@/lib/dashboard/format";
 import { parseUsd } from "@/lib/checkout/funding";
 import { formatUsd } from "@/lib/meter/math";
 import { useMode } from "@/lib/dashboard/mode";
-import type { ChecklistState, Event, Overview, Subscription } from "@/lib/dashboard/types";
+import type {
+  ChecklistState,
+  Event,
+  Overview,
+  Subscription,
+} from "@/lib/dashboard/types";
 import { usePoll } from "@/lib/dashboard/use-poll";
 import { cn } from "@/lib/utils";
 import { LiveAmount } from "./live-amount";
@@ -35,7 +41,11 @@ export function HomePage() {
 
   const fetcher = useCallback(async (): Promise<HomeData> => {
     const checklist = await api.checklist(mode);
-    const done = checklist.hasProduct && checklist.hasSecretKey && checklist.hasEndpoint && checklist.hasSucceededDelivery;
+    const done =
+      checklist.hasProduct &&
+      checklist.hasSecretKey &&
+      checklist.hasEndpoint &&
+      checklist.hasSucceededDelivery;
     return { checklist, overview: done ? await api.overview(mode) : null };
   }, [api, mode]);
 
@@ -67,7 +77,10 @@ export function HomePage() {
       />
       <StatStrip overview={data.overview} />
       <div className="mt-8 grid grid-cols-[minmax(0,1fr)] gap-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:gap-12">
-        <RunningNow subscriptions={data.overview.running} total={data.overview.runningNow} />
+        <RunningNow
+          subscriptions={data.overview.running}
+          total={data.overview.runningNow}
+        />
         <RecentEvents events={data.overview.recentEvents} />
       </div>
     </Page>
@@ -117,7 +130,13 @@ const session = await elapse.checkout.sessions.create({
 });
 // send the subscriber to session.url`;
 
-function Checklist({ state, merchantName }: { state: ChecklistState; merchantName: string }) {
+function Checklist({
+  state,
+  merchantName,
+}: {
+  state: ChecklistState;
+  merchantName: string;
+}) {
   const done = STEPS.filter((s) => state[s.key]).length;
   return (
     <section>
@@ -127,8 +146,9 @@ function Checklist({ state, merchantName }: { state: ChecklistState; merchantNam
             Make your first meter tick.
           </h1>
           <p className="mt-2 max-w-[52ch] text-[15px] text-ink-soft">
-            Four steps for {merchantName || "your business"}. Most merchants finish in an afternoon; the
-            list disappears when the first webhook lands.
+            Four steps for {merchantName || "your business"}. Most merchants
+            finish in an afternoon; the list disappears when the first webhook
+            lands.
           </p>
         </div>
         <p className="numerals shrink-0 text-[13px] text-ink-soft">
@@ -136,34 +156,56 @@ function Checklist({ state, merchantName }: { state: ChecklistState; merchantNam
         </p>
       </div>
 
-      <ol aria-label="First steps" className="mt-8 divide-y divide-border rounded-lg border border-border">
+      <ol
+        aria-label="First steps"
+        className="mt-8 divide-y divide-border rounded-lg border border-border"
+      >
         {STEPS.map((step, i) => {
           const isDone = state[step.key];
           return (
-            <li key={step.key} className="flex gap-4 px-4 py-5 md:gap-6 md:px-6">
+            <li
+              key={step.key}
+              className="flex gap-4 px-4 py-5 md:gap-6 md:px-6"
+            >
               <div className="w-8 shrink-0 pt-0.5">
                 {isDone ? (
                   <span className="flex size-6 items-center justify-center rounded-full bg-muted text-foreground">
                     <Check className="size-3.5" strokeWidth={2.5} />
                   </span>
                 ) : (
-                  <span className="numerals text-[1.25rem] leading-none text-ink-soft">{i + 1}</span>
+                  <span className="numerals text-[1.25rem] leading-none text-ink-soft">
+                    {i + 1}
+                  </span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <h2 className={cn("text-[1.0625rem] font-semibold tracking-[-0.01em]", isDone && "text-ink-soft line-through decoration-border")}>
+                    <h2
+                      className={cn(
+                        "text-[1.0625rem] font-semibold tracking-[-0.01em]",
+                        isDone &&
+                          "text-ink-soft line-through decoration-border",
+                      )}
+                    >
                       {step.title}
                     </h2>
-                    <p className="mt-1 max-w-[56ch] text-[14px] text-ink-soft">{step.body}</p>
+                    <p className="mt-1 max-w-[56ch] text-[14px] text-ink-soft">
+                      {step.body}
+                    </p>
                   </div>
                   {isDone ? (
                     <span className="placard shrink-0 pt-1">Done</span>
                   ) : (
                     <Link
                       href={step.href}
-                      className={cn(buttonVariants({ variant: i === done ? "default" : "outline", size: "sm" }), "h-9 shrink-0 self-start px-3")}
+                      className={cn(
+                        buttonVariants({
+                          variant: i === done ? "default" : "outline",
+                          size: "sm",
+                        }),
+                        "h-9 shrink-0 self-start px-3",
+                      )}
                     >
                       {step.action}
                       <ArrowRight data-icon="inline-end" className="size-3.5" />
@@ -171,7 +213,13 @@ function Checklist({ state, merchantName }: { state: ChecklistState; merchantNam
                   )}
                 </div>
                 {step.key === "hasSucceededDelivery" && !isDone && (
-                  <CodeBlock code={SNIPPET} title="server.ts" lang="ts" wrap className="mt-4" />
+                  <CodeBlock
+                    code={SNIPPET}
+                    title="server.ts"
+                    lang="ts"
+                    wrap
+                    className="mt-4"
+                  />
                 )}
               </div>
             </li>
@@ -186,20 +234,49 @@ function Checklist({ state, merchantName }: { state: ChecklistState; merchantNam
 
 function StatStrip({ overview }: { overview: Overview }) {
   const cells = [
-    { label: "Running now", value: String(overview.runningNow), unit: overview.runningNow === 1 ? "meter" : "meters", live: overview.runningNow > 0 },
+    {
+      label: "Running now",
+      value: String(overview.runningNow),
+      unit: overview.runningNow === 1 ? "meter" : "meters",
+      live: overview.runningNow > 0,
+    },
     // Headline figures floor to three decimals like the invoice totals; the rows keep the exact amounts.
-    { label: "Accrued today", value: formatUsd(parseUsd(overview.accruedTodayUsd), 3), unit: "so far" },
-    { label: "Settled this week", value: formatUsd(parseUsd(overview.settledWeekNetUsd), 3), unit: "net of fee" },
-    { label: "Failed payments", value: String(overview.failedPaymentsWeek), unit: "this week" },
+    {
+      label: "Accrued today",
+      value: formatUsd(parseUsd(overview.accruedTodayUsd), 3),
+      unit: "so far",
+    },
+    {
+      label: "Settled this week",
+      value: formatUsd(parseUsd(overview.settledWeekNetUsd), 3),
+      unit: "net of fee",
+    },
+    {
+      label: "Failed payments",
+      value: String(overview.failedPaymentsWeek),
+      unit: "this week",
+    },
   ];
   return (
     <dl className="mt-6 grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)] divide-x divide-y divide-border overflow-hidden rounded-lg border border-border md:grid-cols-[repeat(4,minmax(0,1fr))] md:divide-y-0">
       {cells.map((c) => (
-        <div key={c.label} className="flex min-w-0 flex-col-reverse justify-end gap-2 px-4 py-4 md:px-5">
+        <div
+          key={c.label}
+          className="flex min-w-0 flex-col-reverse justify-end gap-2 px-4 py-4 md:px-5"
+        >
           <dt className="placard">{c.label}</dt>
           <dd className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className={cn("numerals text-[1.5rem] leading-none md:text-[1.75rem]", c.live && "text-live")}>{c.value}</span>
-            <span className="text-[12px] whitespace-nowrap text-ink-soft">{c.unit}</span>
+            <span
+              className={cn(
+                "numerals text-[1.5rem] leading-none md:text-[1.75rem]",
+                c.live && "text-live",
+              )}
+            >
+              {c.value}
+            </span>
+            <span className="text-[12px] whitespace-nowrap text-ink-soft">
+              {c.unit}
+            </span>
           </dd>
         </div>
       ))}
@@ -207,12 +284,23 @@ function StatStrip({ overview }: { overview: Overview }) {
   );
 }
 
-function RunningNow({ subscriptions, total }: { subscriptions: Subscription[]; total: number }) {
+function RunningNow({
+  subscriptions,
+  total,
+}: {
+  subscriptions: Subscription[];
+  total: number;
+}) {
   return (
     <section className="min-w-0">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">Running now</h2>
-        <Link href="/dashboard/subscriptions" className="text-[13px] text-ink-soft underline-offset-4 hover:text-foreground hover:underline">
+        <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">
+          Running now
+        </h2>
+        <Link
+          href="/dashboard/subscriptions"
+          className="text-[13px] text-ink-soft underline-offset-4 hover:text-foreground hover:underline"
+        >
           All subscriptions
         </Link>
       </div>
@@ -221,7 +309,10 @@ function RunningNow({ subscriptions, total }: { subscriptions: Subscription[]; t
           No meters running. Share a checkout link to start one.
         </p>
       ) : (
-        <ol aria-label="Running now" className="mt-4 divide-y divide-border rounded-lg border border-border">
+        <ol
+          aria-label="Running now"
+          className="mt-4 divide-y divide-border rounded-lg border border-border"
+        >
           {subscriptions.map((s) => (
             <li key={s.id}>
               <Link
@@ -229,16 +320,25 @@ function RunningNow({ subscriptions, total }: { subscriptions: Subscription[]; t
                 className="flex min-h-14 flex-col gap-1 px-4 py-2.5 transition-colors hover:bg-muted/60 sm:flex-row sm:items-center sm:gap-4"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[14px] font-medium">{s.product.name}</p>
-                  <p className="numerals truncate text-[12px] text-ink-soft">{s.customer.email ?? s.customer.id}</p>
+                  <p className="truncate text-[14px] font-medium">
+                    {s.product.name}
+                  </p>
+                  <p className="numerals truncate text-[12px] text-ink-soft">
+                    {s.customer.email ?? s.customer.id}
+                  </p>
                 </div>
-                <LiveAmount subscription={s} className="shrink-0 self-end sm:self-auto" />
+                <LiveAmount
+                  subscription={s}
+                  className="shrink-0 self-end sm:self-auto"
+                />
               </Link>
             </li>
           ))}
           {total > subscriptions.length && (
             <li className="px-4 py-2.5 text-[13px] text-ink-soft">
-              and <span className="numerals">{total - subscriptions.length}</span> more
+              and{" "}
+              <span className="numerals">{total - subscriptions.length}</span>{" "}
+              more
             </li>
           )}
         </ol>
@@ -262,8 +362,13 @@ function RecentEvents({ events }: { events: Event[] }) {
   return (
     <section className="min-w-0">
       <div className="flex items-baseline justify-between">
-        <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">Recent events</h2>
-        <Link href="/dashboard/developers/events" className="text-[13px] text-ink-soft underline-offset-4 hover:text-foreground hover:underline">
+        <h2 className="text-[1.0625rem] font-semibold tracking-[-0.01em]">
+          Recent events
+        </h2>
+        <Link
+          href="/dashboard/developers/events"
+          className="text-[13px] text-ink-soft underline-offset-4 hover:text-foreground hover:underline"
+        >
           All events
         </Link>
       </div>
@@ -272,29 +377,51 @@ function RecentEvents({ events }: { events: Event[] }) {
           No events yet.
         </p>
       ) : (
-        <ol aria-label="Recent events" className="mt-4 divide-y divide-border rounded-lg border border-border">
-          {events.map((e) => (
-            <li key={e.id}>
-              <Link
-                href={`/dashboard/developers/events/${e.id}`}
-                className="flex min-h-12 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/60"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="numerals break-all text-[13px] leading-tight">{e.type}</p>
-                  <p className="numerals truncate text-[12px] text-ink-soft">{e.objectId}</p>
-                </div>
-                <span
-                  className={cn(
-                    "shrink-0 text-[12px]",
-                    e.deliveryState === "failed" ? "text-destructive" : e.deliveryState === "pending" ? "text-caution" : "text-ink-soft",
-                  )}
+        <ol
+          aria-label="Recent events"
+          className="mt-4 divide-y divide-border rounded-lg border border-border"
+        >
+          {events.map((e) => {
+            const context = eventContextLine(e, { amount: false });
+            return (
+              <li key={e.id}>
+                <Link
+                  href={`/dashboard/developers/events/${e.id}`}
+                  className="flex min-h-12 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/60"
                 >
-                  {DELIVERY_WORD[e.deliveryState]}
-                </span>
-                <span className="w-16 shrink-0 text-right text-[12px] text-ink-soft">{timeAgo(e.createdAt, now)}</span>
-              </Link>
-            </li>
-          ))}
+                  <div className="min-w-0 flex-1">
+                    <p className="numerals break-all text-[13px] leading-tight">
+                      {e.type}
+                    </p>
+                    <p className="numerals truncate text-[12px] text-ink-soft">
+                      {e.objectId}
+                    </p>
+                    {/* FR-DSH-093: product · customer, one line, no amount on the home card. */}
+                    {context && (
+                      <p className="truncate text-[12px] text-ink-soft">
+                        {context}
+                      </p>
+                    )}
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 text-[12px]",
+                      e.deliveryState === "failed"
+                        ? "text-destructive"
+                        : e.deliveryState === "pending"
+                          ? "text-caution"
+                          : "text-ink-soft",
+                    )}
+                  >
+                    {DELIVERY_WORD[e.deliveryState]}
+                  </span>
+                  <span className="w-16 shrink-0 text-right text-[12px] text-ink-soft">
+                    {timeAgo(e.createdAt, now)}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>

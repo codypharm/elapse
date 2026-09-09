@@ -303,7 +303,7 @@ export function seedMerchantData(opts: {
   const events: Event[] = [];
   const settledByCustomer = new Map<string, bigint>();
 
-  const push = (type: EventType, objectId: string, at: number, payload: Record<string, unknown>) => {
+  const push = (type: EventType, objectId: string, at: number, payload: Record<string, unknown>, context: Event["context"] = null) => {
     const failed = type !== "invoice.payment_failed" && r() < 0.06;
     events.push({
       id: id("evt") as Event["id"],
@@ -314,6 +314,7 @@ export function seedMerchantData(opts: {
       pendingWebhooks: 0,
       deliveryState: at > now - 20_000 ? "pending" : failed ? "failed" : "delivered",
       payload,
+      context,
     });
   };
 
@@ -352,8 +353,10 @@ export function seedMerchantData(opts: {
       subscriptions.push(sub);
       continue;
     }
-    push("checkout.session.completed", sub.checkoutSession, startedAt!, { session: sub.checkoutSession, subscription: sub.id });
-    push("subscription.created", sub.id, startedAt!, { subscription: sub.id, product: product.id, rate_usd_per_second: product.rateUsdPerSecond });
+    // FR-DSH-093: what the API's dashboard-only `context` resolves for this meter.
+    const ctx = { productName: product.name, customer: customer.id, customerEmail: customer.email };
+    push("checkout.session.completed", sub.checkoutSession, startedAt!, { session: sub.checkoutSession, subscription: sub.id, customer: customer.id }, ctx);
+    push("subscription.created", sub.id, startedAt!, { subscription: sub.id, product: product.id, customer: customer.id, rate_usd_per_second: product.rateUsdPerSecond }, ctx);
 
     // Keeper settles every ~10 minutes; the last pull is on cancel.
     const maxSeconds = Number(fundedNano / rate);
@@ -387,7 +390,7 @@ export function seedMerchantData(opts: {
         ...money(gross, f),
         txId: `0x${(0x9a3f + n * 7919).toString(16).padStart(8, "0")}${"".padEnd(56, "3f")}`.slice(0, 66),
       });
-      push("invoice.settled", sub.id, at, { subscription: sub.id, seconds: secs, amount_settled: formatUsd(gross, 3, { symbol: false }) });
+      push("invoice.settled", sub.id, at, { subscription: sub.id, seconds: secs, amount_settled: formatUsd(gross, 3, { symbol: false }) }, { ...ctx, amountSettled: formatUsd(gross, 3, { symbol: false }) });
     }
     if (status === "canceled") {
       const rest = runSeconds - settledSeconds;
@@ -413,19 +416,19 @@ export function seedMerchantData(opts: {
       const capReached = r() < 0.3;
       sub.endedReason = capReached ? "cap_reached" : "canceled";
       if (capReached) {
-        push("invoice.payment_failed", sub.id, at, { subscription: sub.id, reason: "cap_reached" });
+        push("invoice.payment_failed", sub.id, at, { subscription: sub.id, reason: "cap_reached" }, ctx);
       }
       push("subscription.canceled", sub.id, at, {
         subscription: sub.id,
         seconds_elapsed: runSeconds,
         amount_settled: formatUsd(settledTotal, 3, { symbol: false }),
         ended_reason: sub.endedReason,
-      });
+      }, ctx);
     } else if (status === "paused") {
       const at = sub.startedAt! + runSeconds * 1000;
       sub.pausedAt = at;
       sub.pauseReason = "user";
-      push("subscription.updated", sub.id, at, { subscription: sub.id, status: "paused" });
+      push("subscription.updated", sub.id, at, { subscription: sub.id, status: "paused" }, ctx);
     }
     sub.settledUsd = formatUsd(settledTotal, 3, { symbol: false });
     settledByCustomer.set(customer.id, (settledByCustomer.get(customer.id) ?? 0n) + settledTotal);

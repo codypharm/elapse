@@ -27,6 +27,17 @@ export interface EventRow {
   pending: number;
   /** Rolled up from the event's deliveries (dashboard FR-DSH-023): none/any pending → pending; all finished and any exhausted → failed; else delivered. */
   delivery_state: "pending" | "delivered" | "failed";
+  /** FR-API-136: product name and customer email resolved from the payload's ids (through the subscription for invoices); null when nothing resolves. Dashboard sessions only. */
+  context: EventContext | null;
+}
+
+export interface EventContext {
+  product_name: string;
+  /** The `cus_` id, so the dashboard can name a customer who has no email. */
+  customer: string;
+  customer_email: string | null;
+  /** Invoice events only: what the customer paid for the period (`data.object.amount_settled`). */
+  amount_settled?: string;
 }
 
 /** A transaction handle or the pool itself; both are `SQL`. */
@@ -90,7 +101,14 @@ const COLS = sql`e.id, e.merchant_id, e.livemode, e.type, e.data, e.raw_body, e.
      WHEN count(*) FILTER (WHERE d.status IN ('queued', 'retrying')) > 0 THEN 'pending'
      WHEN count(*) FILTER (WHERE d.status = 'exhausted') > 0 THEN 'failed'
      ELSE 'delivered' END
-   FROM deliveries d WHERE d.event_id = e.id) AS delivery_state`;
+   FROM deliveries d WHERE d.event_id = e.id) AS delivery_state,
+  (SELECT jsonb_build_object('product_name', p.name, 'customer', c.id, 'customer_email', c.email)
+     || CASE WHEN e.type LIKE 'invoice.%' AND e.data->'object'->>'amount_settled' IS NOT NULL
+             THEN jsonb_build_object('amount_settled', e.data->'object'->>'amount_settled') ELSE '{}'::jsonb END
+   FROM subscriptions s JOIN products p ON p.id = s.product_id JOIN customers c ON c.id = s.customer_id
+   WHERE s.merchant_id = e.merchant_id AND s.livemode = e.livemode
+     AND s.id = COALESCE(e.data->'object'->>'subscription', CASE WHEN e.data->'object'->>'object' = 'subscription' THEN e.data->'object'->>'id' END)
+   LIMIT 1) AS context`;
 
 export function serializeEvent(r: EventRow): EventObject {
   return {
@@ -109,11 +127,13 @@ export function serializeEvent(r: EventRow): EventObject {
  * The event as the API returns it on reads: the §5.3 object plus two dashboard conveniences.
  * Never used for webhook bodies, which are the stored `raw_body` bytes (FR-WRK-021).
  */
-export function serializeEventForRead(r: EventRow) {
+/** The read shape (FR-API-063 + dashboard fields). `context` (FR-API-136) is attached only when `withContext` is set: dashboard sessions, never API keys. */
+export function serializeEventForRead(r: EventRow, withContext = false) {
   return {
     ...serializeEvent(r),
     object_id: typeof r.data.object.id === "string" ? (r.data.object.id as string) : null,
     delivery_state: r.delivery_state,
+    ...(withContext ? { context: r.context } : {}),
   };
 }
 

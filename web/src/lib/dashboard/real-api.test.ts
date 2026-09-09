@@ -46,6 +46,9 @@ describe("mapping", () => {
   });
   it("event: object id and delivery state pass through", () => {
     expect(mapEvent({ id: "evt_1", type: "invoice.settled", created: T0, livemode: false, data: { object: { id: "in_1" } }, pending_webhooks: 0, object_id: "in_1", delivery_state: "delivered" })).toMatchObject({ objectId: "in_1", deliveryState: "delivered", payload: { id: "in_1" } });
+    // FR-DSH-093: the dashboard-only context maps to camelCase; absent (an API-key shape) → undefined, null stays null.
+    expect(mapEvent({ id: "evt_1", type: "invoice.settled", created: T0, livemode: false, data: { object: { id: "in_1" } }, pending_webhooks: 0, object_id: "in_1", delivery_state: "delivered", context: { product_name: "GPU hours", customer: "cus_1", customer_email: null, amount_settled: "0.332" } }).context).toEqual({ productName: "GPU hours", customer: "cus_1", customerEmail: null, amountSettled: "0.332" });
+    expect(mapEvent({ id: "evt_1", type: "invoice.settled", created: T0, livemode: false, data: { object: { id: "in_1" } }, pending_webhooks: 0, object_id: "in_1", delivery_state: "delivered", context: null }).context).toBeNull();
   });
 });
 

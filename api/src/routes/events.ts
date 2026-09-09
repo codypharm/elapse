@@ -35,7 +35,7 @@ events.openapi(
     const auth = c.get("auth");
     try {
       const rows = await listEvents(auth.merchantId, auth.livemode, { limit: q.limit, startingAfter: q.starting_after, type: q.type, since: q.since, until: q.until });
-      return c.json(page(rows.map(serializeEventForRead), q.limit, "/v1/events"), 200);
+      return c.json(page(rows.map((r) => serializeEventForRead(r, auth.via === "session")), q.limit, "/v1/events"), 200);
     } catch (e) {
       if (e instanceof CursorNotFound) throw invalid(e.message, "starting_after");
       throw e;
@@ -58,7 +58,7 @@ events.openapi(
     const row = await findEvent(auth.merchantId, auth.livemode, id);
     if (!row) throw notFound("event", id);
     const deliveries = (await listDeliveriesForEvent(row.id)).map(serializeDeliverySummary);
-    return c.json({ ...serializeEventForRead(row), deliveries }, 200);
+    return c.json({ ...serializeEventForRead(row, auth.via === "session"), deliveries }, 200);
   },
 );
 
