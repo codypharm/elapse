@@ -113,6 +113,8 @@ sequenceDiagram
 | AUSD (live mode) | `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` |
 | MockUSD (test mode) | `0xD9E7Fc7d58D97daC5dc5501404fc1073A8aBE6C1` |
 
+The mode picks the token ([ADR 2026-09-07](docs/decisions/2026-09-07-add-money-and-ausd-live-on-testnet.md)). Test mode escrows MockUSD, which the checkout mints for the subscriber, so nobody needs a faucet. Live mode escrows real AUSD, which nobody mints: a short wallet sees Add money and must be sent AUSD. Both share six decimals and ERC-2612 permit. After the hackathon, live mode moves to mainnet AUSD (`0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a` on chain 143); MockUSD never leaves testnet.
+
 Platform fee 2 % of each settlement to treasury ([ADR 2026-09-08](docs/decisions/2026-09-08-platform-fee-two-percent.md)).
 
 **Trust boundaries.** Secret keys and webhook secrets are hashed or encrypted at rest and shown once. The indexer holds no merchant secret; it only knows the ingest token. Subscribers never see a private key, an address, or a transaction outside judge mode. The relayer key signs transactions and holds no AUSD.

@@ -15,7 +15,10 @@ Read from the deployment record in the repository at build time.
 
 <Contracts />
 
-The mainnet factory is published here when it is deployed; the test network is what the Quickstart and the dashboard's test mode use.
+Both modes run on the test network until the mainnet factory is published here. The token is chosen by the mode:
+
+- **Test mode** escrows MockUSD. The checkout mints it for the subscriber, so a meter starts without anyone holding anything. It has the same shape as AUSD (six decimals, ERC-2612 permit), so a checkout that passes in test mode behaves the same in live mode. It is never deployed to mainnet.
+- **Live mode** escrows AUSD from Agora. Nothing is minted: a subscriber whose wallet is short sees the Add funds step and needs AUSD sent to it.
 
 ## Events
 
