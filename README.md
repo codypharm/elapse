@@ -14,7 +14,7 @@ Track 2 · Monad Metropolis · Consumer Products & Payments. Submission 13 Octob
 | API | https://api.elapse.finance (`GET /v1/status` is public) |
 | Docs | https://docs.elapse.finance — start at the Quickstart |
 | SDK | `npm install @elapse/sdk` (0.1.3, Node 20+) |
-| CLI | `npx @elapse/cli listen --forward http://localhost:3000/webhooks` (0.1.2) |
+| CLI | `npx @elapse/cli listen --forward http://localhost:3000/webhooks` (0.1.3) |
 
 Test mode (`sk_test_`) runs real streams on Monad testnet with MockUSD that the platform mints for the subscriber, so an integration costs nothing. Live mode (`sk_live_`) escrows AUSD on the same testnet until a mainnet record exists; the checkout shows Add money when the wallet is short.
 

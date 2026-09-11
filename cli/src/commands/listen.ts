@@ -1,4 +1,4 @@
-import { forward as forwardTo } from "../forward";
+import { CLI_VERSION, forward as forwardTo } from "../forward";
 import { clock, paint, prettyJson, shortId } from "../format";
 import { Platform, PlatformError, type CliSession } from "../platform";
 import { readSSE, SSEConnectError } from "../sse";
@@ -76,7 +76,7 @@ export async function listen(o: ListenOptions): Promise<ListenSummary> {
   const filter = o.events ? new Set(o.events) : null;
   const summary: ListenSummary = { received: 0, forwarded: 0, failed: 0, skipped: 0 };
 
-  o.stdout(`Elapse CLI 0.1.0 · ${session.livemode ? p.red("LIVE mode") : "test mode"} · merchant ${session.merchant_name}`);
+  o.stdout(`Elapse CLI ${CLI_VERSION} · ${session.livemode ? p.red("LIVE mode") : "test mode"} · merchant ${session.merchant_name}`);
   o.stdout(`Your webhook signing secret is ${p.bold(session.signing_secret)}  (put it in ELAPSE_WEBHOOK_SECRET)`);
   if (o.printSecret) o.stdout(`ELAPSE_WEBHOOK_SECRET=${session.signing_secret}`);
   o.stdout(forwardUrl ? `Ready. Forwarding to ${forwardUrl}` : "Ready. Printing only (--no-forward)");

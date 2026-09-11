@@ -24,6 +24,8 @@ Every snippet on this page is extracted from the finished merchant in [`examples
     export ELAPSE_SECRET_KEY=sk_test_…
     export ELAPSE_API_URL=https://api.elapse.finance
     ```
+
+    An `export` lasts only as long as the terminal. Put both in your project's `.env` (git-ignored) so your server keeps them across restarts, and in your host's environment settings when you deploy. Every snippet below reads them from the environment, and so does the CLI.
   </Step>
 
   <Step title="Install the SDK and construct a client">

@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { forward } from "../src/forward";
+import { CLI_VERSION, forward } from "../src/forward";
 import { listen, type ListenOptions } from "../src/commands/listen";
 import { startMockPlatform, startReceiver, type MockPlatform } from "./mock-platform";
 
@@ -83,6 +83,8 @@ describe("FR-CLI-010..017 elapse listen --forward", () => {
     expect(out.join("\n")).toContain("whsec_mock000000000000000000000000000");
     expect(out.join("\n")).toContain(`Ready. Forwarding to http://localhost:${port}/webhooks`);
     expect(out.join("\n")).toContain("test mode · merchant Acme GPU");
+    // The banner names the running version, not a literal that drifts from package.json.
+    expect(out.join("\n")).toContain(`Elapse CLI ${CLI_VERSION} ·`);
     platform.emit({ id: "dlv_1", event_id: "evt_2b", type: "subscription.canceled", raw_body: RAW });
     await until(() => platform.acks.length === 1);
     expect(rx.received[0]!.body).toBe(RAW);

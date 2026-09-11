@@ -27,7 +27,7 @@ Elapse is Stripe Billing for things that should charge by the second. A merchant
 | Indexer | `indexer/` | `specs/indexer-frd.md` | Hosted on Envio Cloud, endpoint `2adf0f0`, ingesting into the API. `pnpm reconcile` still deferred. |
 | Webhook worker | `api/src/worker/` | `specs/worker-frd.md` | Hosted as the second Railway process: deliveries with retries and auto-disable, keeper (hourly settle, cap ends), reconcile, heartbeat, CLI sweep, expiry notices and emails. |
 | SDK (TS) | `sdk/ts/` | `specs/sdk-frd.md` | `@elapse/sdk@0.1.3` on npm: ten methods, `manage_url`, invoice and product filters. |
-| CLI | `cli/` | `specs/cli-frd.md` | `@elapse/cli@0.1.2` on npm: `listen --forward`, `events`, `products`, `checkout`. |
+| CLI | `cli/` | `specs/cli-frd.md` | `@elapse/cli@0.1.3` on npm: `listen --forward`, `events`, `products`, `checkout`. |
 | Web (landing, checkout, account, dashboard) | `web/` | `specs/landing-frd.md`, `specs/checkout-frd.md`, `specs/dashboard-frd.md` | Hosted at elapse.finance (Vercel) on the real API: landing, checkout with Privy and add money, account page, full dashboard with paging, search as you type, notifications. |
 | Docs site | `docs-site/` (Mintlify, site in `docs-site/site/`) | `specs/docs-site-frd.md` | Hosted at docs.elapse.finance: Quickstart, guides, generated API reference, snippets synced from code, CI. |
 | Example merchant | `examples/saas/` | `specs/examples-frd.md` | Proven against production twice on 9 Sep: through the CLI and through a dashboard-added endpoint via a tunnel. |

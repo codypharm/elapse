@@ -14,8 +14,6 @@ the spec that owns it is updated in the same change.
 | --- | --- | --- | --- |
 | **Merchant-fixed cap is unusable on the page.** A session created with `max_duration_seconds` is rejected at `prepare` with `cap_fixed` for any cap the subscriber picks. `real-api.ts` types the field but its mapper surfaces only `last_max_duration_seconds`, so `CapStep` never learns the cap is fixed and always renders a free picker. | [`specs/checkout-frd.md`](./specs/checkout-frd.md) → Open, 2026-09-11 | Not the dashboard (no UI sets the field) and not `examples/saas`. Does reach anyone following `checkout.mdx`, `sdks.mdx` or `testing.mdx`, all of which teach the parameter. | Client only, the API is correct: carry `max_duration_seconds` through the mapper and render a fixed cap as a stated duration instead of a picker. One mapper field, one branch, plus tests. |
 | **A subscriber who picks an unaffordable cap is stranded.** The Add funds screen polls and advances by itself once the balance covers the cap, but offers no way back to the cap step — only "Not now", which leaves checkout. | This page. William decided 2026-09-11 to leave it. | A judge who tops up less than the cap on their own phone reaches a dead end. Does not affect a demo the team drives. | A Back control on the cap-step entry path only. The ready-view path has no cap step to return to, so it keeps funding or "Not now". Changes FR-CHK-031. |
-| **The docs never say to persist the secret key.** The quickstart shows `export ELAPSE_SECRET_KEY=…`, which dies with the terminal. The string `.env` appears nowhere on the docs site, though `examples/saas` uses one. | This page, 2026-09-11 | Every developer following the quickstart literally. | One line in the quickstart's first step naming `.env` or the host's environment settings. |
-| **The CLI banner prints the wrong version.** `Elapse CLI 0.1.0` while the published package is `0.1.2`. | This page, 2026-09-11 | Cosmetic; visible to anyone running `elapse listen`. | Read the version from `package.json` rather than a constant. |
 
 ## Deferred by decision
 
@@ -43,3 +41,5 @@ the spec that owns it is updated in the same change.
 | Date | Who | Change |
 | --- | --- | --- |
 | 2026-09-11 | Claude (for William) | Created after the first live-mode run on the hosted app. Collected the items already deferred across the FRDs and ADRs, and added the four findings from that run. |
+| 2026-09-11 | Claude (for William) | Docs gap fixed, so removed: the quickstart's first step now says an `export` lasts only as long as the terminal and to put both variables in `.env` and the host's environment settings. |
+| 2026-09-11 | Claude (for William) | CLI version banner fixed, so removed: `listen.ts` had a hardcoded `0.1.0` and the test fixture pinned it, which is how it drifted. The banner now reads `CLI_VERSION`, the test asserts the running version, and `cli-listen.mdx` on the docs site regenerated to 0.1.2. |
