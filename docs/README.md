@@ -12,6 +12,7 @@
 | 6 | [`design-brief.md`](./design-brief.md) and [`../DESIGN.md`](../DESIGN.md) | 10 min | Frontend only: every page and state, and the recorded visual system. |
 | 7 | [`onboarding.md`](./onboarding.md) | 10 min | Local setup, commands, conventions, who owns what. |
 | 8 | [`decisions/`](./decisions/README.md) | 5 min | Dated decision records: why something was chosen, by whom. Never edited after the fact. |
+| 9 | [`post-hackathon.md`](./post-hackathon.md) | 3 min | What we knowingly left for after 13 October: deferred defects, decisions that parked work, and operational follow-ups. |
 
 ## One-paragraph version
 

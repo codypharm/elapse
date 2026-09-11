@@ -111,6 +111,8 @@ Parked 2026-09-06 (William: note and move to Week 4; none gates the demo):
 - ~~**Email receipt** (FR-CHK-008) and **Start again** (FR-CHK-007) need API routes.~~ Both built 2026-09-07 (FR-API-123 receipt email, FR-API-126 again).
 - **Hosted Envio deploy** (indexer FR-IDX-051): William connects the repo on Envio Cloud; `envio dev` covers every local run meanwhile.
 
+- **Merchant-fixed cap is unusable on the page (found 2026-09-11, live-mode run; not fixed).** A session created with `max_duration_seconds` is rejected at `prepare` with `cap_fixed` for any cap the subscriber picks. The API is right; the client is wrong. `real-api.ts` types the session's `max_duration_seconds` but its mapper surfaces only `last_max_duration_seconds`, so `CapStep` never learns the cap is fixed and always renders a free picker. Fix is in the client: carry the field, and render a fixed cap as a stated duration instead of a picker. Not reachable from the dashboard (`createCheckoutLink` never sends the field and no UI sets one) and not used by `examples/saas`, so neither the demo nor the Week 6 clone-and-run gate is affected — but `checkout.mdx`, `sdks.mdx` and `testing.mdx` all teach the parameter, and `testing.mdx` recommends it, so a developer following the docs gets a checkout nobody can complete.
+
 - Privy app id and bounty requirements (Week 3).
 - `/account` is built after the dashboard and is the first cut if the deadline bites (dashboard decision 16).
 
@@ -161,3 +163,4 @@ Parked 2026-09-06 (William: note and move to Week 4; none gates the demo):
 | 2026-09-09 | Claude (for William) | Judge pass: a stopped session reopened later rebuilt its receipt from `started_at → canceled_at`, counting paused time (105 s shown for 74 s billed), against BR-CHK-003. The real mapper now carries the server's `seconds_elapsed`/`settled_usd` on a canceled subscription and `buildReceipt` prefers them; the recount remains for the mock and the predicted cap end. |
 | 2026-09-09 | William | Signed FR-CHK-032 (meter follows the server; 5 s poll and focus). |
 | 2026-09-09 | Claude (for William) | Built FR-CHK-032: `checkout-page.tsx` re-reads the session every 5 s and on window focus while the subscription is active or paused, stops at the receipt; `checkout-page-follow.test.tsx` covers the external cancel, the server totals, the stop of polling, and focus. |
+| 2026-09-11 | Claude (for William) | Live-mode run on the hosted app (`sub_uoI4vfJHJR255c`, real AUSD, 85 s, $0.34 settled, $14.06 refunded, 2% fee, six deliveries): passed. One defect recorded in Open — a merchant-fixed `max_duration_seconds` is dropped by the checkout's mapper, so the cap step rejects every choice with `cap_fixed`. William: document now, fix later. |
