@@ -24,6 +24,7 @@ export const ProfileSchema = z
     support_url: z.string().nullable(),
     payout_address: z.string().nullable(),
     fee_bps: z.number().int(),
+    live_chain_id: z.number().int(),
     branding: z.object({ display_name: z.string().nullable(), logo_url: z.string().nullable(), accent: z.string().nullable(), support_url: z.string().nullable() }),
     notifications: z.object({ endpoint_exhausted_email: z.boolean(), key_expiry_email: z.boolean() }),
     checklist: z.object({ key_created: z.boolean(), product_created: z.boolean(), endpoint_created: z.boolean(), first_delivery_succeeded: z.boolean() }),

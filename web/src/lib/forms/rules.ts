@@ -64,7 +64,7 @@ const CODE = /^\d{6}$/;
 /** Server bounds on the cap (FR-API-032): 60 s to 30 days, in whole minutes here. */
 export const CAP_MIN_MINUTES = 1;
 export const CAP_MAX_MINUTES = 43_200;
-/** Token decimals: AUSD and MockUSD are 6-decimal tokens, so a rate finer than that is not representable. */
+/** Token decimals: AUSD is a 6-decimal token, so a rate finer than that is not representable. */
 export const RATE_DECIMALS = 6;
 
 const url: Rule = {

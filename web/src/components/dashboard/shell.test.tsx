@@ -25,6 +25,7 @@ const merchant: Merchant = {
   supportUrl: null,
   payoutAddress: null,
   feeBps: 100,
+  liveChainId: 10143,
   branding: { name: "Nimbus" },
   createdAt: 0,
 };

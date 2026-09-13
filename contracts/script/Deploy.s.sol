@@ -3,12 +3,12 @@ pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";
 import {StreamFactory} from "../src/StreamFactory.sol";
-import {MockUSD} from "../src/MockUSD.sol";
 
-/// Deploys the implementation + factory and, on testnet, a MockUSD, then
-/// writes `deployments/<chainId>.json` for the API, indexer and docs
-/// (FR-CON-062). The AUSD address per chain is recorded alongside so every
-/// consumer reads one file (Undecided 7).
+/// Deploys the implementation + factory, then writes
+/// `deployments/<chainId>.json` for the API, indexer and docs (FR-CON-062).
+/// The AUSD address per chain is recorded alongside so every consumer reads
+/// one file (Undecided 7). MockUSD is a test fixture only and is never
+/// deployed (FR-CON-063, ADR 2026-09-13 AUSD only).
 ///
 /// Usage:
 ///   TREASURY=0x... KEEPER=0x... forge script script/Deploy.s.sol --rpc-url monad_testnet --broadcast --account <keystore>
@@ -27,10 +27,6 @@ contract Deploy is Script {
         vm.startBroadcast();
         StreamFactory factory = new StreamFactory(treasury);
         if (keeper != address(0)) factory.setKeeper(keeper);
-        address mock = address(0);
-        if (chainId != 143) {
-            mock = address(new MockUSD());
-        }
         vm.stopBroadcast();
 
         address ausd = chainId == 143 ? AUSD_MAINNET : chainId == 10143 ? AUSD_TESTNET : address(0);
@@ -46,15 +42,13 @@ contract Deploy is Script {
         vm.serializeUint(json, "ausdDecimals", 6);
         // Simulation block: a safe lower bound for the indexer. deploy-testnet.sh
         // overwrites it with the real receipt block after broadcasting.
-        vm.serializeUint(json, "deployedAtBlock", block.number);
-        string memory out = vm.serializeAddress(json, "mockUsd", mock);
+        string memory out = vm.serializeUint(json, "deployedAtBlock", block.number);
 
         string memory path = string.concat("deployments/", vm.toString(chainId), ".json");
         vm.writeJson(out, path);
 
         console.log("factory       ", address(factory));
         console.log("implementation", factory.implementation());
-        console.log("mockUSD       ", mock);
         console.log("keeper        ", factory.keeper());
         console.log("wrote         ", path);
     }

@@ -16,7 +16,7 @@ Track 2 · Monad Metropolis · Consumer Products & Payments. Submission 13 Octob
 | SDK | `npm install @elapse/sdk` (0.1.3, Node 20+) |
 | CLI | `npx @elapse/cli listen --forward http://localhost:3000/webhooks` (0.1.3) |
 
-Test mode (`sk_test_`) runs real streams on Monad testnet with MockUSD that the platform mints for the subscriber, so an integration costs nothing. Live mode (`sk_live_`) escrows AUSD on the same testnet until a mainnet record exists; the checkout shows Add money when the wallet is short.
+Both modes run real streams on Monad testnet and escrow testnet AUSD ([ADR 2026-09-13](docs/decisions/2026-09-13-ausd-only-mockusd-to-test-fixture.md)); nothing is minted, and a wallet short of the cap sees Add funds on the checkout. Live mode (`sk_live_`) moves to mainnet AUSD when a chain-143 record lands, with no integration change.
 
 ## Surfaces
 
@@ -46,7 +46,7 @@ flowchart LR
   api["api/ · Bun + Hono on Railway<br/>REST /v1 · dashboard · /internal/ingest"]
   worker["worker process<br/>deliveries · keeper · reconcile · notices"]
   pg[("Postgres")]
-  chain["Monad testnet 10143<br/>StreamFactory → AccrualStream per subscription<br/>AUSD live · MockUSD test"]
+  chain["Monad testnet 10143<br/>StreamFactory → AccrualStream per subscription<br/>AUSD, both modes"]
   envio["indexer/ · Envio HyperIndex"]
   privy["Privy"]
   resend["Resend"]
@@ -111,9 +111,8 @@ sequenceDiagram
 | StreamFactory | `0x4B768dA0D29C084145f23Cd06b3b5fc2e07a2840` |
 | AccrualStream implementation | `0x3Ccb83A576FD4f8b30b1E46441d89CD2AF4D5586` |
 | AUSD (live mode) | `0xa9012a055bd4e0eDfF8Ce09f960291C09D5322dC` |
-| MockUSD (test mode) | `0xD9E7Fc7d58D97daC5dc5501404fc1073A8aBE6C1` |
 
-The mode picks the token ([ADR 2026-09-07](docs/decisions/2026-09-07-add-money-and-ausd-live-on-testnet.md)). Test mode escrows MockUSD, which the checkout mints for the subscriber, so nobody needs a faucet. Live mode escrows real AUSD, which nobody mints: a short wallet sees Add money and must be sent AUSD. Both share six decimals and ERC-2612 permit. After the hackathon, live mode moves to mainnet AUSD (`0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a` on chain 143); MockUSD never leaves testnet.
+The chain picks the token ([ADR 2026-09-13](docs/decisions/2026-09-13-ausd-only-mockusd-to-test-fixture.md)): AUSD, in both modes — six decimals, ERC-2612 permit, never minted by us. A short wallet sees Add funds and must be sent AUSD. After the hackathon, live mode moves to mainnet AUSD (`0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a` on chain 143). MockUSD survives only as a Foundry test fixture.
 
 Platform fee 2 % of each settlement to treasury ([ADR 2026-09-08](docs/decisions/2026-09-08-platform-fee-two-percent.md)).
 

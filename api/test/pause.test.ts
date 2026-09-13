@@ -41,7 +41,7 @@ async function relay(base: string, action: "pause" | "resume", wallet = subscrib
 beforeEach(async () => {
   await resetDb();
   m = await seedMerchant();
-  chain = fakeChain();
+  chain = fakeChain({ balances: { [subscriber.address]: 10_000_000_000n } });
   setChainClient(chain.client);
   privy = await privyFixture();
   privy.use();

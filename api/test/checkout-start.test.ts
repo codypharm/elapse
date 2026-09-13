@@ -38,7 +38,7 @@ describe("FR-API-032 prepare", () => {
     expect(out.subscription).toMatch(/^sub_/);
     expect(out.customer).toMatch(/^cus_/);
     const d = deploymentFor(10143);
-    expect(out.permit.domain).toEqual({ name: "Mock USD", version: "1", chainId: 10143, verifyingContract: d.mockUsd });
+    expect(out.permit.domain).toEqual({ name: "AUSD", version: "1", chainId: 10143, verifyingContract: d.ausd });
     expect(out.permit.message).toEqual({ owner: subscriber.address.toLowerCase() as `0x${string}`, spender: d.factory, value: "14400000", nonce: "0", deadline: String(NOW + 600) });
     expect(out.permit.primaryType).toBe("Permit");
     const sub = await findSubscription(m.merchantId, false, out.subscription);
@@ -88,24 +88,18 @@ describe("FR-API-032 start", () => {
     return { session: (await findCheckoutSession(m.merchantId, livemode, session.id))!, out, signature };
   }
 
-  it("FR_API_032_start_mints_in_test_mode_submits_createWithPermit_and_stores_pending_tx", async () => {
+  it("FR_API_032_start_escrows_AUSD_submits_createWithPermit_and_stores_pending_tx", async () => {
+    // AUSD only (ADR 2026-09-13): test mode escrows the chain's AUSD; nothing is minted.
+    chain.balances.set(subscriber.address.toLowerCase(), 20_000_000n);
     const { session, out, signature } = await prepared();
     const res = await startSession({ session, signature, now: NOW });
     expect(res.pending_tx).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(chain.mints).toEqual([{ to: subscriber.address.toLowerCase(), amount: 14_400_000n }]);
     expect(chain.creates).toHaveLength(1);
     const d = deploymentFor(10143);
-    expect(chain.creates[0]).toMatchObject({ chainId: 10143, subscriber: subscriber.address.toLowerCase(), token: d.mockUsd, ratePerSecond: 4000n, maxEscrow: 14_400_000n, deadline: BigInt(NOW + 600) });
+    expect(chain.creates[0]).toMatchObject({ chainId: 10143, subscriber: subscriber.address.toLowerCase(), token: d.ausd, ratePerSecond: 4000n, maxEscrow: 14_400_000n, deadline: BigInt(NOW + 600) });
     expect(chain.creates[0]!.merchant.toLowerCase()).toBe(m.payoutAddress.toLowerCase());
     const sub = await findSubscription(m.merchantId, false, out.subscription);
     expect(sub).toMatchObject({ status: "incomplete", pending_tx: res.pending_tx });
-  });
-
-  it("FR_API_032_start_skips_the_mint_when_the_wallet_already_holds_enough", async () => {
-    chain.balances.set(subscriber.address.toLowerCase(), 20_000_000n);
-    const { session, signature } = await prepared();
-    await startSession({ session, signature, now: NOW });
-    expect(chain.mints).toEqual([]);
   });
 
   it("FR_API_034_a_live_start_on_testnet_escrows_AUSD_and_a_short_wallet_is_refused_before_any_transaction", async () => {
@@ -116,7 +110,6 @@ describe("FR-API-032 start", () => {
     expect(err).toBeInstanceOf(CheckoutStateError);
     expect((err as CheckoutStateError).code).toBe("insufficient_balance");
     expect((err as Error).message).toBe("This meter needs $14.40 to start. Your balance is $3.10.");
-    expect(chain.mints).toEqual([]);
     expect(chain.creates).toEqual([]);
     // exactly enough starts, without a mint, on AUSD
     chain.balances.set(subscriber.address.toLowerCase(), 14_400_000n);
@@ -124,14 +117,17 @@ describe("FR-API-032 start", () => {
     await startSession({ session: again.session, signature: again.signature, now: NOW });
     expect(chain.creates).toHaveLength(1);
     expect(chain.creates[0]).toMatchObject({ chainId: 10143, token: deploymentFor(10143).ausd });
-    expect(chain.mints).toEqual([]);
   });
 
-  it("FR_API_034_a_test_start_still_mints_MockUSD_on_the_same_chain", async () => {
+  it("FR_API_034_a_test_start_short_of_the_cap_is_refused_and_nothing_is_minted", async () => {
+    // AUSD-only (ADR 2026-09-13): no mintable token exists, so test mode is refused like live.
+    chain.balances.set(subscriber.address.toLowerCase(), 3_100_000n);
     const { session, signature } = await prepared(3600, false);
-    await startSession({ session, signature, now: NOW });
-    expect(chain.mints).toEqual([{ to: subscriber.address.toLowerCase(), amount: 14_400_000n }]);
-    expect(chain.creates[0]).toMatchObject({ chainId: 10143, token: deploymentFor(10143).mockUsd });
+    const err = await startSession({ session, signature, now: NOW }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CheckoutStateError);
+    expect((err as CheckoutStateError).code).toBe("insufficient_balance");
+    expect((err as Error).message).toBe("This meter needs $14.40 to start. Your balance is $3.10.");
+    expect(chain.creates).toEqual([]);
   });
 
   it("FR_API_032_a_signature_from_another_wallet_is_400", async () => {
@@ -151,6 +147,7 @@ describe("FR-API-032 start", () => {
   });
 
   it("FR_API_032_a_second_start_is_409", async () => {
+    chain.balances.set(subscriber.address.toLowerCase(), 20_000_000n);
     const { session, signature } = await prepared();
     await startSession({ session, signature, now: NOW });
     const again = (await findCheckoutSession(m.merchantId, false, session.id))!;

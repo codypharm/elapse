@@ -7,9 +7,21 @@ import CliListen from '/snippets/cli-listen.mdx';
 
 ## Test mode
 
-Use a `sk_test_` key and everything you create lives in test mode: real meters on the test network, funded with a test dollar the platform hands out at checkout, delivered to your endpoints with real signatures. Nothing you or your subscribers own moves. The dashboard has a switch between the two modes; each has its own keys, products, endpoints and events.
+Use a `sk_test_` key and everything you create lives in test mode: real meters on the test network, escrowed in testnet AUSD — money with no value outside the test network — delivered to your endpoints with real signatures. The flow is exactly live mode's: a subscriber wallet short of the cap sees **Add funds** on the checkout, and unused escrow returns the moment the meter stops. The dashboard has a switch between the two modes; each has its own keys, products, endpoints and events.
 
 Test and live are separate worlds, not a flag on an object. A test id under a live key is a `404`.
+
+## Getting testnet AUSD
+
+A subscriber wallet needs testnet AUSD before a meter can start; the checkout's **Add funds** step shows the wallet's receiving address to send it to. Agora runs a faucet contract for it on Monad testnet — call `requestFunds(address)` on `0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C` from any wallet holding a little testnet MON for gas, naming the receiving address, and 10,000 testnet AUSD arrives in a block or two:
+
+```bash
+cast send 0xd236c18D274E54FAccC3dd9DDA4b27965a73ee6C \
+  "requestFunds(address)" <receiving address from the Add funds step> \
+  --rpc-url https://testnet-rpc.monad.xyz --account <any funded keystore>
+```
+
+The faucet has a global 60-second cooldown shared by all callers, so a reverted call usually means try again in a minute. It refuses an address already holding 100,000. It is Agora's contract, not ours.
 
 ## A demo rate
 
@@ -28,7 +40,7 @@ curl "$ELAPSE_API_URL/v1/products" \
 ```
 </CodeGroup>
 
-Keep the cap short too: `max_duration_seconds: 120` on the checkout session means the subscriber is asked to fund thirty test dollars, not the default hour.
+Keep the cap short too: `max_duration_seconds: 120` on the checkout session means the subscriber is asked to fund about fifty cents, not the default hour.
 
 ## Forward webhooks to your laptop
 

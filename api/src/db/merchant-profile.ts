@@ -64,6 +64,8 @@ export function serializeProfile(m: MerchantProfileRow, livemode: boolean, list:
     support_url: m.support_url,
     payout_address: m.payout_address,
     fee_bps: feeBps(livemode),
+    // FR-DSH-143 (ADR 2026-09-13): the dashboard's live-mode banner shows while this is not 143.
+    live_chain_id: config.chains.live,
     branding: {
       display_name: m.branding.display_name ?? null,
       logo_url: m.branding.logo_url ?? null,

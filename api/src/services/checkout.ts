@@ -15,7 +15,7 @@ import { getPayoutAddress } from "../db/merchants";
 import { findProduct } from "../db/products";
 import { findSubscription, insertSubscription, type SubscriptionRow } from "../db/subscriptions";
 import { chainClient } from "../chain/relayer";
-import { deploymentFor, escrowTokenFor, isMintable } from "../chain/deployments";
+import { deploymentFor, escrowTokenFor } from "../chain/deployments";
 import { buildPermitTypedData, recoverPermitSigner, splitSignature, PERMIT_TYPES, type PermitDomain } from "../chain/permit";
 import { relayInnerHash, recoverCancelSigner, type RelayAction } from "../chain/cancel-auth";
 import { baseUnitsToDecimal } from "../lib/money";
@@ -116,7 +116,7 @@ export async function prepareSession(input: {
     return sub;
   });
 
-  const token = escrowTokenFor(chainId, session.livemode);
+  const token = escrowTokenFor(chainId);
   const chain = chainClient();
   const [domain, nonce] = await Promise.all([chain.readPermitDomain(chainId, token), chain.readNonce(chainId, token, wallet)]);
   const deadline = BigInt(now + PERMIT_TTL_SECONDS);
@@ -156,7 +156,7 @@ export async function startSession(input: { session: CheckoutSessionRow; signatu
   if (!payout) throw new CheckoutStateError("no_payout_address", "The merchant has not set a payout address.");
 
   const chainId = sub.chain_id;
-  const token = escrowTokenFor(chainId, sub.livemode);
+  const token = escrowTokenFor(chainId);
   const maxEscrow = BigInt(sub.max_escrow_wei);
   const chain = chainClient();
   const domain = await chain.readPermitDomain(chainId, token);
@@ -164,14 +164,11 @@ export async function startSession(input: { session: CheckoutSessionRow; signatu
   const signer = await recoverPermitSigner(td, input.signature);
   if (signer !== wallet.toLowerCase()) throw new CheckoutStateError("bad_signature", "The signature does not match the subscriber's wallet.");
 
-  // MockUSD (both modes until mainnet): the relayer tops the wallet up so no one hunts for a faucet (Undecided 4).
-  // AUSD (FR-API-034): a wallet that cannot fund the cap is refused here, before any gas is spent.
+  // FR-API-034 (AUSD only, ADR 2026-09-13): a wallet that cannot fund the cap is refused here,
+  // in either mode, before any gas is spent. Nothing is ever minted.
   const balance = await chain.readBalance(chainId, token, wallet);
   if (balance < maxEscrow) {
-    if (!isMintable(chainId, token)) {
-      throw new CheckoutStateError("insufficient_balance", `This meter needs $${usd(maxEscrow)} to start. Your balance is $${usd(balance)}.`);
-    }
-    await chain.mintMock(chainId, token, wallet, maxEscrow);
+    throw new CheckoutStateError("insufficient_balance", `This meter needs $${usd(maxEscrow)} to start. Your balance is $${usd(balance)}.`);
   }
 
   const { v, r, s } = splitSignature(input.signature);
@@ -294,21 +291,20 @@ export async function cancelAsKeeper(sub: SubscriptionRow): Promise<Hex> {
 }
 
 /**
- * FR-API-048: what the checkout needs to know before the cap step — the wallet's balance of
- * this session's escrow token, and whether a short wallet can be topped up by us (MockUSD)
- * or must be funded by the subscriber (AUSD). Names for the one screen that may say them.
+ * FR-API-048 (amended 2026-09-13, AUSD only): what the checkout needs to know before the cap
+ * step — the wallet's AUSD balance. No token is mintable, so a short wallet funds itself in
+ * either mode; `needs_funding` is always true. Names for the one screen that may say them.
  */
 export async function readCheckoutBalance(input: { session: CheckoutSessionRow; walletAddress: string }) {
   const chainId = input.session.livemode ? config.chains.live : config.chains.test;
-  const token = escrowTokenFor(chainId, input.session.livemode);
+  const token = escrowTokenFor(chainId);
   const wallet = input.walletAddress.toLowerCase() as Address;
   const balance = await chainClient().readBalance(chainId, token, wallet);
-  const mintable = isMintable(chainId, token);
   return {
     balance_usd: usd(balance),
-    needs_funding: !mintable,
+    needs_funding: true,
     receive_address: wallet,
-    token: mintable ? "Test dollars" : "AUSD",
+    token: "AUSD",
     network: chainId === 143 ? "Monad" : "Monad testnet",
     chain_id: chainId,
   };

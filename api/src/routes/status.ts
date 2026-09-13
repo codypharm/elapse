@@ -90,7 +90,7 @@ status.openapi(
       {
         chain_id: chainId,
         block_time_ms: MONAD_BLOCK_TIME_MS,
-        contracts: { factory: d.factory.toLowerCase(), token: escrowTokenFor(chainId, false).toLowerCase(), live_token: escrowTokenFor(chainId, true).toLowerCase() },
+        contracts: { factory: d.factory.toLowerCase(), token: escrowTokenFor(chainId).toLowerCase(), live_token: escrowTokenFor(config.chains.live).toLowerCase() },
         indexer,
         worker: {
           alive: health.alive,

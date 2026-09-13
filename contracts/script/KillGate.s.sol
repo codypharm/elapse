@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import {Script, console} from "forge-std/Script.sol";
 import {StreamFactory} from "../src/StreamFactory.sol";
 import {AccrualStream} from "../src/AccrualStream.sol";
-import {MockUSD} from "../src/MockUSD.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// The Week 1 kill gate on a live network (FR-CON-073), in two steps because a
 /// script cannot wait 83 seconds on chain:
@@ -16,20 +16,20 @@ import {MockUSD} from "../src/MockUSD.sol";
 /// The broadcaster is the Subscriber. The Merchant is a fixed address nobody
 /// holds, so its balance is a clean readout of what was paid.
 ///
-/// By default the gate runs on the deployment's MockUSD and mints what it
-/// needs. Set TOKEN=0x... to run on a real token the broadcaster already holds
-/// (AUSD, USDC): nothing is minted and the balance must cover the escrow.
+/// The gate runs on the deployment's AUSD (FR-CON-063, ADR 2026-09-13 AUSD
+/// only): nothing is minted and the broadcaster's balance must cover the
+/// escrow. Set TOKEN=0x... to run on another token the broadcaster holds.
 contract KillGate is Script {
     address constant MERCHANT = address(uint160(0xE1A5E));
     uint256 constant RATE = 4_000; // $0.004 / s at 6 decimals
     uint256 constant CAP_SECONDS = 3_600;
     uint256 constant ESCROW = RATE * CAP_SECONDS; // $14.40
 
-    function _deployments() internal view returns (address factory, address mockUsd) {
+    function _deployments() internal view returns (address factory, address ausd) {
         string memory path = string.concat("deployments/", vm.toString(block.chainid), ".json");
         string memory json = vm.readFile(path);
         factory = vm.parseJsonAddress(json, ".factory");
-        mockUsd = vm.parseJsonAddress(json, ".mockUsd");
+        ausd = vm.parseJsonAddress(json, ".ausd");
     }
 
     function _statePath() internal view returns (string memory) {
@@ -37,20 +37,15 @@ contract KillGate is Script {
     }
 
     function start() external {
-        (address factoryAddr, address mockUsd) = _deployments();
+        (address factoryAddr, address ausd) = _deployments();
         StreamFactory factory = StreamFactory(factoryAddr);
-        address tokenAddr = vm.envOr("TOKEN", mockUsd);
-        bool isMock = tokenAddr == mockUsd;
-        MockUSD usd = MockUSD(tokenAddr);
+        address tokenAddr = vm.envOr("TOKEN", ausd);
+        IERC20 usd = IERC20(tokenAddr);
         vm.startBroadcast();
         // The broadcaster is the Subscriber. Read it after startBroadcast:
         // before that point msg.sender is Foundry's placeholder, not the keystore.
         (, address subscriber,) = vm.readCallers();
-        if (isMock) {
-            usd.mint(subscriber, ESCROW);
-        } else {
-            require(usd.balanceOf(subscriber) >= ESCROW, "wallet does not hold enough of TOKEN for the escrow");
-        }
+        require(usd.balanceOf(subscriber) >= ESCROW, "wallet does not hold enough of the token for the escrow");
         address streamAddr = factory.create(MERCHANT, subscriber, tokenAddr, RATE, ESCROW);
         usd.approve(streamAddr, ESCROW);
         AccrualStream(streamAddr).deposit(ESCROW);
@@ -75,7 +70,7 @@ contract KillGate is Script {
     function cancel() external {
         string memory json = vm.readFile(_statePath());
         AccrualStream stream = AccrualStream(vm.parseJsonAddress(json, ".stream"));
-        MockUSD usd = MockUSD(address(stream.token()));
+        IERC20 usd = IERC20(address(stream.token()));
         address treasury = stream.treasury();
 
         uint256 merchantBefore = usd.balanceOf(MERCHANT);

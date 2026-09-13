@@ -1,12 +1,12 @@
 /**
  * Process configuration, read once. Everything here is non-secret or a
  * reference to a secret held in the environment; nothing is logged.
- * Test mode = Monad testnet 10143 with MockUSD. Live mode is 10143 too until a mainnet record exists
+ * Both modes = Monad testnet 10143 with AUSD (ADR 2026-09-13). Live mode is 10143 only until a mainnet record exists
  * (ADR 2026-09-07 testnet submission); it becomes 143 with AUSD when `deployments/143.json` lands.
  */
 export const config = {
   port: Number(process.env.PORT ?? 4000),
-  /** AUSD and MockUSD are both 6-decimal tokens (contracts README, Tokens table). */
+  /** AUSD is a 6-decimal token (contracts README, Tokens table). */
   tokenDecimals: Number(process.env.TOKEN_DECIMALS ?? 6),
   chains: {
     test: 10143,

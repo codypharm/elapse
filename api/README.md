@@ -68,7 +68,7 @@ mirror the indexer's bodies byte for byte.
 `POST /v1/checkout/sessions/:id/prepare` (pk_) binds the subscriber's wallet as a Customer, creates
 the `incomplete` Subscription for the chosen cap, and returns the ERC-2612 permit to sign (exact
 `max_escrow`, factory as spender, 10-minute deadline). `POST …/start {signature}` checks the
-signature recovers to that wallet, mints MockUSD in test mode when the wallet is short, submits
+signature recovers to that wallet, refuses a wallet short of the cap (`insufficient_balance`), submits
 `StreamFactory.createWithPermit` through the relayer and records `pending_tx`. `active` arrives
 from ingest. The relayer needs `RELAYER_PRIVATE_KEY` (MON for gas, never AUSD), `MONAD_RPC_URL`,
 `CHAIN_ID`; without them `start` answers 503. The merchant must have a payout address.
@@ -103,7 +103,7 @@ Spec: [`docs/specs/worker-frd.md`](../docs/specs/worker-frd.md) (signed 2026-09-
 
 ## Modes and chains
 
-Test keys drive real streams on Monad testnet (10143) with `MockUSD`, which the relayer mints to the subscriber at `start` so nobody hunts for a faucet (FR-API-032). Live keys run on the same testnet until a mainnet record exists (`LIVE_CHAIN_ID`, default 10143) but escrow real testnet **AUSD** ([ADR 2026-09-07 add money](../docs/decisions/2026-09-07-add-money-and-ausd-live-on-testnet.md)): nothing is minted, a short wallet sees Add money on the checkout, and `start` refuses before any gas is spent (FR-API-034). Minting is keyed to the token, not the mode, so live moves to mainnet (143) with AUSD when `contracts/deployments/143.json` lands, with no code change. The relayer's own testnet MON comes from <https://faucet.monad.xyz>: a platform chore, not a user's.
+Both modes drive real streams on Monad testnet (10143) and escrow testnet **AUSD** ([ADR 2026-09-13 AUSD only](../docs/decisions/2026-09-13-ausd-only-mockusd-to-test-fixture.md)): nothing is minted, a short wallet sees Add funds on the checkout, and `start` refuses before any gas is spent (FR-API-034). The escrow token is a property of the chain, so live mode moves to mainnet (143) with mainnet AUSD when `contracts/deployments/143.json` lands, with no code change (`LIVE_CHAIN_ID`, default 10143). The relayer's own testnet MON comes from <https://faucet.monad.xyz>: a platform chore, not a user's.
 
 ## Hosting (Undecided 11, decided)
 

@@ -44,7 +44,7 @@ function codeFor(status: number, apiCode: string | undefined, path: string): Con
 // ─── wire shapes ──────────────────────────────────────────────────────────────
 
 type WireProfile = {
-  id: string; name: string | null; email: string; support_email: string | null; support_url: string | null; payout_address: string | null; fee_bps: number;
+  id: string; name: string | null; email: string; support_email: string | null; support_url: string | null; payout_address: string | null; fee_bps: number; live_chain_id: number;
   branding: { display_name: string | null; logo_url: string | null; accent: string | null; support_url: string | null };
   notifications: { endpoint_exhausted_email: boolean; key_expiry_email: boolean };
   checklist: { key_created: boolean; product_created: boolean; endpoint_created: boolean; first_delivery_succeeded: boolean };
@@ -85,6 +85,7 @@ export function mapMerchant(w: WireProfile): Merchant {
     supportUrl: w.support_url,
     payoutAddress: w.payout_address,
     feeBps: w.fee_bps,
+    liveChainId: w.live_chain_id,
     branding: {
       name: w.branding.display_name ?? w.name ?? "",
       ...(w.branding.logo_url ? { logoUrl: w.branding.logo_url } : {}),

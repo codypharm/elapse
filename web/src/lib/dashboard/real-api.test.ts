@@ -18,7 +18,7 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 const profile = {
-  id: "mrc_1", name: null, email: "m@acme.test", support_email: null, support_url: null, payout_address: "0x1111111111111111111111111111111111111111", fee_bps: 100,
+  id: "mrc_1", name: null, email: "m@acme.test", support_email: null, support_url: null, payout_address: "0x1111111111111111111111111111111111111111", live_chain_id: 10143, fee_bps: 100,
   branding: { display_name: null, logo_url: null, accent: null, support_url: null },
   notifications: { endpoint_exhausted_email: true, key_expiry_email: true },
   checklist: { key_created: true, product_created: false, endpoint_created: false, first_delivery_succeeded: false }, created: T0,

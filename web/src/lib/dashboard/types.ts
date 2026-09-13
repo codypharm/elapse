@@ -28,6 +28,8 @@ export type Merchant = {
   payoutAddress: string | null;
   /** Platform fee in basis points; 100 = 1 %. */
   feeBps: number;
+  /** The chain live mode settles on; the FR-DSH-143 banner shows while this is not 143. */
+  liveChainId: number;
   branding: Branding;
   createdAt: number;
 };

@@ -6,7 +6,6 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
   const chainId = opts.chainId ?? 10143;
   const balances = new Map<string, bigint>(Object.entries(opts.balances ?? {}).map(([k, v]) => [k.toLowerCase(), v]));
   const nonces = new Map<string, bigint>();
-  const mints: Array<{ to: string; amount: bigint }> = [];
   const creates: CreateWithPermitArgs[] = [];
   const cancels: Array<{ stream: string; deadline: bigint; signature: string }> = [];
   const pauses: Array<{ stream: string; deadline: bigint; signature: string }> = [];
@@ -28,7 +27,7 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
   const client: ChainClient = {
     address: "0xaf1444abf40afc91bcb4a6793765553c6bccea0d",
     async readPermitDomain(_c, token) {
-      return { name: "Mock USD", version: "1", chainId, verifyingContract: token };
+      return { name: "AUSD", version: "1", chainId, verifyingContract: token };
     },
     async readNonce(_c, _t, owner) {
       return nonces.get(owner.toLowerCase()) ?? 0n;
@@ -43,11 +42,6 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
         throw e;
       }
       return nativeBalances.get(owner.toLowerCase()) ?? 0n;
-    },
-    async mintMock(_c, _t, to, amount) {
-      mints.push({ to: to.toLowerCase(), amount });
-      balances.set(to.toLowerCase(), (balances.get(to.toLowerCase()) ?? 0n) + amount);
-      return hash();
     },
     async createWithPermit(args) {
       creates.push(args);
@@ -104,7 +98,7 @@ export function fakeChain(opts: { chainId?: number; balances?: Record<string, bi
     },
   };
   return {
-    client, mints, creates, cancels, pauses, resumes, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces, nativeBalances, state,
+    client, creates, cancels, pauses, resumes, keeperCancels, settleBatches, settleEstimates, streamStates, streamLogs, logQueries, balances, nonces, nativeBalances, state,
     set failNextSettle(e: Error | null) {
       state.failNextSettle = e;
     },

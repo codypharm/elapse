@@ -27,8 +27,8 @@ forge test
 | --- | --- |
 | `src/AccrualStream.sol` | The meter: escrow with a hard cap, start / pause / resume / cancel, settle with fee split, cap end, relayed cancel by signature |
 | `src/StreamFactory.sol` | Clones, fee and treasury knobs (10 % ceiling; 2 % deployed), `createWithPermit` (one signature, one transaction), `settleBatch` |
-| `src/MockUSD.sol` | Six-decimal ERC-20 with `permit` and a public `mint`; same shape as AUSD, for tests and for testnet until real AUSD can be obtained |
-| `script/Deploy.s.sol` | Deploys factory (+ MockUSD off mainnet) and writes `deployments/<chainId>.json` |
+| `src/MockUSD.sol` | Foundry test double: six-decimal ERC-20 with `permit` and a public `mint`, same shape as AUSD. Never deployed (FR-CON-063, ADR 2026-09-13) |
+| `script/Deploy.s.sol` | Deploys the factory and writes `deployments/<chainId>.json` |
 | `test/` | 55 tests named after their FR ids, plus a six-invariant handler suite |
 
 ## The kill gate (FR-CON-073)

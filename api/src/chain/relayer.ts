@@ -31,8 +31,6 @@ export interface ChainClient {
   readBalance(chainId: number, token: Address, owner: Address): Promise<bigint>;
   /** Native MON balance in wei, for the relayer gas sample (worker FR-WRK-074). */
   readNativeBalance(chainId: number, owner: Address): Promise<bigint>;
-  /** Testnet only: mint MockUSD so a test checkout never needs a faucet (FR-API-032). Waits for the receipt. */
-  mintMock(chainId: number, token: Address, to: Address, amount: bigint): Promise<Hex>;
   /** Submits `StreamFactory.createWithPermit`; resolves with the tx hash as soon as it is broadcast. */
   createWithPermit(args: CreateWithPermitArgs): Promise<Hex>;
   /** Per-stream replay nonce shared by `cancelFor`, `pauseFor` and `resumeFor` (FR-CON-017/018). */
@@ -130,13 +128,6 @@ export function viemChainClient(env: { privateKey: Hex; rpcUrl: string; chainId:
     async readNativeBalance(chainId, owner) {
       assertChain(chainId);
       return publicClient.getBalance({ address: owner });
-    },
-    async mintMock(chainId, token, to, amount) {
-      assertChain(chainId);
-      if (chainId === 143) throw new Error("mint is testnet-only");
-      const hash = await wallet.writeContract({ account, chain, address: token, abi: permitTokenAbi, functionName: "mint", args: [to, amount] });
-      await publicClient.waitForTransactionReceipt({ hash });
-      return hash;
     },
     async createWithPermit(a) {
       assertChain(a.chainId);

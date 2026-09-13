@@ -48,11 +48,12 @@ describe("FR-API-048 balance", () => {
     });
   });
 
-  it("FR_API_048_a_test_session_never_needs_funding", async () => {
+  it("FR_API_048_a_test_session_needs_funding_like_a_live_one", async () => {
     const id = await session(false);
     const r = await api("GET", `/v1/checkout/sessions/${id}/balance`, { key: m.pkTest, headers: await identity() });
     expect(r.status).toBe(200);
-    expect(r.body).toMatchObject({ balance_usd: "0.00", needs_funding: false, token: "Test dollars", network: "Monad testnet" });
+    // AUSD only (ADR 2026-09-13): no token is mintable, so test mode funds itself too.
+    expect(r.body).toMatchObject({ balance_usd: "0.00", needs_funding: true, token: "AUSD", network: "Monad testnet" });
   });
 
   it("FR_API_048_needs_an_identity_token", async () => {

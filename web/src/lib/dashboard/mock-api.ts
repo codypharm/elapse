@@ -224,6 +224,7 @@ function seed(now: number): Store {
     supportUrl: "https://nimbus.example/support",
     payoutAddress: "0x7a3f9c2e1d4b5a6f8e9d0c1b2a3f4e5d6c7b8a90",
     feeBps: 100,
+    liveChainId: 10143,
     branding: { name: "Nimbus", accent: undefined, supportUrl: "https://nimbus.example/support" },
     createdAt: now - 21 * 86_400_000,
   };
@@ -501,6 +502,7 @@ export function createMockDashboardApi(opts: { now?: () => number; latencyMs?: n
           supportUrl: null,
           payoutAddress: null,
           feeBps: 100,
+          liveChainId: 10143,
           branding: { name: "" },
           createdAt: now(),
         };

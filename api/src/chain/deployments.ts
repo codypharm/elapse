@@ -10,7 +10,6 @@ export interface Deployment {
   feeBps: number;
   ausd: Address;
   ausdDecimals: number;
-  mockUsd: Address;
   deployedAtBlock: number;
 }
 
@@ -23,19 +22,11 @@ export function deploymentFor(chainId: number): Deployment {
 }
 
 /**
- * The token a mode escrows on a chain: live mode escrows AUSD, test mode MockUSD, on whichever
- * chain the mode runs (ADR 2026-09-07 add money: both modes on 10143 until mainnet, live on
- * AUSD there too). Mainnet has no MockUSD, so it is AUSD in both modes.
+ * The token escrowed on a chain: always the chain record's AUSD, in both modes
+ * (ADR 2026-09-13 AUSD only). Mode maps to chain, never to token.
  */
-export function escrowTokenFor(chainId: number, livemode: boolean): Address {
-  const d = deploymentFor(chainId);
-  if (chainId === 143) return d.ausd;
-  return livemode ? d.ausd : d.mockUsd;
-}
-
-/** Whether the relayer may mint the escrow token to a short wallet: true only for MockUSD (FR-API-032/034). Keyed by token, not mode: live mode runs on 10143 until a mainnet record exists (ADR 2026-09-07 testnet submission). */
-export function isMintable(chainId: number, token: Address): boolean {
-  return token.toLowerCase() === deploymentFor(chainId).mockUsd.toLowerCase();
+export function escrowTokenFor(chainId: number): Address {
+  return deploymentFor(chainId).ausd;
 }
 
 /**
