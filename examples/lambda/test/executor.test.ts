@@ -3,30 +3,36 @@ import { InvokeCommand } from "@aws-sdk/client-lambda";
 import { awsRunner, mockRunner } from "../src/executor";
 
 describe("FR-EXM-121 mockRunner", () => {
-  it("returns a deterministic ok result without touching the network", async () => {
-    const r1 = await mockRunner().run("return 2+2");
-    const r2 = await mockRunner().run("return 2+2");
+  it("returns a deterministic tile without touching the network", async () => {
+    const input = { width: 32, height: 24, iterations: 50 };
+    const r1 = await mockRunner().run(input);
+    const r2 = await mockRunner().run(input);
     expect(r1.ok).toBe(true);
     expect(r1).toEqual(r2);
-    expect(typeof r1.ms).toBe("number");
-    expect(Array.isArray(r1.logs)).toBe(true);
+    if (!r1.ok) throw new Error(r1.error);
+    expect(r1.result.width).toBe(32);
+    expect(r1.result.height).toBe(24);
+    expect(r1.result.png).toMatch(/^data:image\/png;base64,/);
   });
 });
 
 describe("FR-EXM-121 awsRunner", () => {
-  it("invokes the named function with the code and returns the parsed result", async () => {
+  it("invokes the named function with the request and returns the tile", async () => {
     let seen: InvokeCommand["input"] | undefined;
     const client = {
       async send(command: InvokeCommand) {
         seen = command.input;
-        const body = { ok: true, result: 4, ms: 9, logs: ["hi"] };
+        const body = { ok: true, result: { png: "data:image/png;base64,AAA", width: 32, height: 24, iterations: 50 }, ms: 9, logs: [] };
         return { StatusCode: 200, Payload: new TextEncoder().encode(JSON.stringify(body)) };
       },
     };
-    const r = await awsRunner({ client, fnName: "elapse-lambda-runner" }).run("return 2+2");
+    const r = await awsRunner({ client, fnName: "elapse-lambda-runner" }).run({ width: 32, height: 24, iterations: 50 });
+
     expect(seen?.FunctionName).toBe("elapse-lambda-runner");
-    expect(JSON.parse(new TextDecoder().decode(seen!.Payload as Uint8Array))).toEqual({ code: "return 2+2" });
-    expect(r).toEqual({ ok: true, result: 4, ms: 9, logs: ["hi"] });
+    expect(JSON.parse(new TextDecoder().decode(seen!.Payload as Uint8Array))).toEqual({ width: 32, height: 24, iterations: 50 });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.result.width).toBe(32);
   });
 });
 
@@ -38,7 +44,7 @@ describe("FR-EXM-123 awsRunner errors", () => {
         return { StatusCode: 200, FunctionError: "Unhandled", Payload: new TextEncoder().encode(JSON.stringify(errBody)) };
       },
     };
-    const r = await awsRunner({ client, fnName: "fn" }).run("while(true){}");
+    const r = await awsRunner({ client, fnName: "fn" }).run({ width: 8, height: 8, iterations: 10 });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.error).toBe("execution timed out");
   });
@@ -49,7 +55,7 @@ describe("FR-EXM-123 awsRunner errors", () => {
         throw Object.assign(new Error("Rate exceeded"), { name: "TooManyRequestsException" });
       },
     };
-    const r = await awsRunner({ client, fnName: "fn" }).run("return 1");
+    const r = await awsRunner({ client, fnName: "fn" }).run({ width: 8, height: 8, iterations: 10 });
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.error).toMatch(/rate|too many|busy/i);

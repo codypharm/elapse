@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AddressInfo } from "node:net";
 import { createServer, sweepOnce } from "../src/server";
 import { createSessionStore } from "../src/session";
-import type { Executor, RunResult } from "../src/executor";
+import type { Executor, RunInput, RunResult } from "../src/executor";
 import { canceled, completed, created, sign } from "./sign";
 
 const SECRET = "whsec_test_secret";
@@ -15,13 +15,13 @@ afterEach(async () => {
 });
 
 /** Records every code string it is asked to run, so tests can prove it was not called. */
-function spyExecutor(): Executor & { calls: string[] } {
-  const calls: string[] = [];
+function spyExecutor(): Executor & { calls: RunInput[] } {
+  const calls: RunInput[] = [];
   return {
     calls,
-    async run(code: string): Promise<RunResult> {
-      calls.push(code);
-      return { ok: true, result: 4, ms: 1, logs: [] };
+    async run(input: RunInput): Promise<RunResult> {
+      calls.push(input);
+      return { ok: true, result: { png: "data:image/png;base64,AAA", width: input.width, height: input.height, iterations: input.iterations }, ms: 1, logs: [] };
     },
   };
 }
@@ -52,8 +52,9 @@ async function start(over: Record<string, unknown> = {}) {
   return { base, sessions, executor, lines, canceled, deps };
 }
 
-const run = (base: string, sub: string, code = "return 2+2") =>
-  fetch(`${base}/run?sub=${sub}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) });
+const INPUT: RunInput = { width: 32, height: 24, iterations: 50 };
+const run = (base: string, sub: string, input: RunInput = INPUT) =>
+  fetch(`${base}/run?sub=${sub}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input }) });
 
 describe("FR-EXM-114 first Run starts the session", () => {
   it("does not execute when there is no active session; answers 409 with a checkout url", async () => {
@@ -70,10 +71,10 @@ describe("FR-EXM-120 running code inside a live session", () => {
     const { base, sessions, executor } = await start();
     sessions.applyOpen("sub_1", { startedAt: NOW, nowMs: NOW });
 
-    const res = await run(base, "sub_1", "return 2+2");
+    const res = await run(base, "sub_1");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, result: 4, ms: 1, logs: [] });
-    expect(executor.calls).toEqual(["return 2+2"]);
+    expect(await res.json()).toEqual({ ok: true, result: { png: "data:image/png;base64,AAA", width: 32, height: 24, iterations: 50 }, ms: 1, logs: [] });
+    expect(executor.calls).toEqual([INPUT]);
   });
 });
 
@@ -200,13 +201,21 @@ describe("FR-EXM-110/111/112 the pages", () => {
     expect(html).not.toContain("/c/cs_");
   });
 
-  it("GET /console has a code box, a Run button, output and a meter — and no Start or Stop control", async () => {
+  it("GET /console mounts the React + Monaco editor, Run, output and a meter — and no Start or Stop control", async () => {
     const { base } = await start();
     const html = await (await fetch(`${base}/console`)).text();
-    expect(html).toMatch(/<textarea[^>]*id="code"/);
-    expect(html).toMatch(/id="run"[^>]*>\s*Run\s*</);
+
+    // Pinned CDN assets, no bundler (FR-EXM-100). React 18 because 19 ships no UMD build.
+    expect(html).toMatch(/react[/@]18\.3\.1/);
+    expect(html).toMatch(/monaco-editor\/0\.52\.2/);
+
+    // The editor mount, the runner's source read-only beside it, and the usual controls.
+    expect(html).toContain('id="editor"');
+    expect(html).toContain('id="source"');
+    expect(html).toMatch(/id="run"/);
     expect(html).toContain('id="out"');
     expect(html).toContain('id="meter"');
+
     expect(html).not.toMatch(/>\s*Start\s*</);
     expect(html).not.toMatch(/>\s*Stop\s*</);
   });
