@@ -46,7 +46,7 @@
   var code = document.getElementById("code"), run = document.getElementById("run");
   var out = document.getElementById("out"), clock = document.getElementById("clock");
   var amount = document.getElementById("amount"), state = document.getElementById("state");
-  var sub = null, startedAt = null, timer = null, beat = null;
+  var sub = null, startedAt = null, timer = null, beat = null, watch = null;
 
   function money(micro) {
     var cents = Math.floor(micro / 10000);
@@ -67,10 +67,46 @@
     if (!on && beat) { clearInterval(beat); beat = null; }
   }
 
+  // Two decimals from a decimal string, without parseFloat on money.
+  function twoDp(amount) {
+    var p = String(amount == null ? "0" : amount).split(".");
+    return (p[0] || "0") + "." + ((p[1] || "") + "00").slice(0, 2);
+  }
+
+  // The session is over. Stop everything and show what was actually settled — not the estimate.
+  function ended(a) {
+    running(false);
+    if (watch) { clearInterval(watch); watch = null; }
+    sub = null;
+    var secs = a.seconds_elapsed || 0;
+    var m = Math.floor(secs / 60), ss = secs % 60;
+    clock.textContent = (m < 10 ? "0" : "") + m + ":" + (ss < 10 ? "0" : "") + ss;
+    amount.textContent = "$" + twoDp(a.paid_usd);
+    state.textContent = "Session ended — paid " + secs + "s · $" + twoDp(a.paid_usd);
+    document.getElementById("note").textContent =
+      "That is the exact amount settled, not the estimate. Press Run to open a new session.";
+  }
+
+  // The server ends sessions by itself, so the page has to watch for it.
+  async function poll() {
+    if (!sub) return;
+    try {
+      var a = await (await fetch("/access/" + sub)).json();
+      if (!a.active) ended(a);
+    } catch (e) { /* transient; try again next tick */ }
+  }
+
   async function adopt(id) {
     sub = id;
     var a = await (await fetch("/access/" + id)).json();
-    if (a.active) { startedAt = a.started_at ? a.started_at * 1000 : Date.now(); running(true); paint(); }
+    if (a.active) {
+      startedAt = a.started_at ? a.started_at * 1000 : Date.now();
+      running(true);
+      paint();
+      if (!watch) watch = setInterval(poll, 3000);
+    } else if (a.reason === "ended") {
+      ended(a);
+    }
     return a;
   }
 
