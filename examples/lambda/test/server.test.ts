@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { AddressInfo } from "node:net";
 import { createServer, sweepOnce } from "../src/server";
 import { createSessionStore } from "../src/session";
-import type { Executor, RunInput, RunResult } from "../src/executor";
+import type { Executor, RunResult } from "../src/executor";
 import { canceled, completed, created, sign } from "./sign";
 
 const SECRET = "whsec_test_secret";
@@ -15,13 +15,13 @@ afterEach(async () => {
 });
 
 /** Records every code string it is asked to run, so tests can prove it was not called. */
-function spyExecutor(): Executor & { calls: RunInput[] } {
-  const calls: RunInput[] = [];
+function spyExecutor(): Executor & { calls: string[] } {
+  const calls: string[] = [];
   return {
     calls,
-    async run(input: RunInput): Promise<RunResult> {
-      calls.push(input);
-      return { ok: true, result: { png: "data:image/png;base64,AAA", width: input.width, height: input.height, iterations: input.iterations }, ms: 1, logs: [] };
+    async run(code: string): Promise<RunResult> {
+      calls.push(code);
+      return { ok: true, result: 4, ms: 1, logs: [] };
     },
   };
 }
@@ -52,9 +52,9 @@ async function start(over: Record<string, unknown> = {}) {
   return { base, sessions, executor, lines, canceled, deps };
 }
 
-const INPUT: RunInput = { width: 32, height: 24, iterations: 50 };
-const run = (base: string, sub: string, input: RunInput = INPUT) =>
-  fetch(`${base}/run?sub=${sub}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input }) });
+const CODE = "return 2+2";
+const run = (base: string, sub: string, code: string = CODE) =>
+  fetch(`${base}/run?sub=${sub}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code }) });
 
 describe("FR-EXM-114 first Run starts the session", () => {
   it("does not execute when there is no active session; answers 409 with a checkout url", async () => {
@@ -73,8 +73,8 @@ describe("FR-EXM-120 running code inside a live session", () => {
 
     const res = await run(base, "sub_1");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, result: { png: "data:image/png;base64,AAA", width: 32, height: 24, iterations: 50 }, ms: 1, logs: [] });
-    expect(executor.calls).toEqual([INPUT]);
+    expect(await res.json()).toEqual({ ok: true, result: 4, ms: 1, logs: [] });
+    expect(executor.calls).toEqual([CODE]);
   });
 });
 

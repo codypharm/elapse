@@ -5,25 +5,13 @@
  */
 
 export interface RunnerEvent {
-  width: number;
-  height: number;
-  iterations: number;
-  centreX?: number;
-  centreY?: number;
-  scale?: number;
-}
-
-export interface RunnerTile {
-  /** `data:image/png;base64,…` */
-  png: string;
-  width: number;
-  height: number;
-  iterations: number;
+  /** The body of an async function. Use `return` to produce a value. */
+  code: string;
 }
 
 export type RunnerReply =
-  | { ok: true; result: RunnerTile; ms: number; logs: string[] }
+  | { ok: true; result: unknown; ms: number; logs: string[] }
   | { ok: false; error: string; ms: number; logs: string[] };
 
-/** Renders a Mandelbrot tile. Never executes caller-supplied code (BR-EXM-108). */
+/** Executes caller-supplied JavaScript inside the Lambda microVM. */
 export function handler(event: unknown): Promise<RunnerReply>;

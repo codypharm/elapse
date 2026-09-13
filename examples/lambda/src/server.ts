@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
-import type { Executor, RunInput } from "./executor";
+import type { Executor } from "./executor";
 import { handleWebhook, type SessionStore } from "./webhooks";
 
 /**
@@ -32,6 +32,11 @@ const CONSOLE = asset("console.html");
 const CANCEL = asset("cancel.html");
 const STYLE = asset("northwind.css");
 const RUNNER_SOURCE = readFileSync(new URL("../runner/index.mjs", import.meta.url), "utf8");
+const DEFAULT_SNIPPET = readFileSync(new URL("../runner/snippet.mjs", import.meta.url), "utf8")
+  .replace(/^[\s\S]*?export const DEFAULT_SNIPPET = `/, "")
+  .replace(/`;\s*$/, "")
+  .replace(/\\`/g, "`")
+  .replace(/\\\$/g, "$");
 const MERCHANT = "Northwind Compute";
 const escapeHtml = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 const fill = (tpl: string, vars: Record<string, string>) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k: string) => escapeHtml(vars[k] ?? ""));
@@ -68,10 +73,10 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: ServerDeps
       }
       return send(res, 409, "application/json", JSON.stringify({ needs_start: true, checkout_url: session.url }));
     }
-    const { input } = JSON.parse(await readRaw(req)) as { input?: RunInput };
-    // Reject rubbish before it costs a daily run; the runner clamps the rest.
-    if (!input || typeof input.width !== "number" || typeof input.height !== "number" || typeof input.iterations !== "number") {
-      return send(res, 400, "application/json", JSON.stringify({ error: "input must be { width, height, iterations } as numbers" }));
+    const { code } = JSON.parse(await readRaw(req)) as { code?: string };
+    // Reject rubbish before it costs a daily run.
+    if (typeof code !== "string" || code.trim() === "") {
+      return send(res, 400, "application/json", JSON.stringify({ error: "code must be a non-empty string" }));
     }
     const now = deps.now();
     // BR-EXM-109: the cost guard is checked before the runner is ever reached.
@@ -79,7 +84,7 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: ServerDeps
       return send(res, 429, "application/json", JSON.stringify({ error: "daily execution limit reached" }));
     }
     deps.sessions.touch(sub, now, { run: true });
-    const result = await deps.executor.run(input);
+    const result = await deps.executor.run(code);
     return send(res, 200, "application/json", JSON.stringify(result));
   }
 
@@ -100,6 +105,11 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: ServerDeps
   }
   if (req.method === "GET" && url.pathname === "/northwind.css") {
     return send(res, 200, "text/css; charset=utf-8", STYLE);
+  }
+
+  // FR-EXM-122: the JavaScript the console opens on.
+  if (req.method === "GET" && url.pathname === "/default-snippet") {
+    return send(res, 200, "text/plain; charset=utf-8", DEFAULT_SNIPPET);
   }
 
   // FR-EXM-111: the console shows what the runner actually does, read-only.

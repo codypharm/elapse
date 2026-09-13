@@ -6,43 +6,73 @@ import { handler } from "../runner/index.mjs";
 
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-describe("FR-EXM-122 the runner renders a tile; it does not run code", () => {
-  it("returns a real PNG for a known request", async () => {
-    const r = await handler({ width: 32, height: 24, iterations: 50 });
+describe("FR-EXM-122 the runner executes submitted JavaScript", () => {
+  it("returns the value the code returns", async () => {
+    const r = await handler({ code: "return 2 + 2" });
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error(r.error);
-
-    expect(r.result.width).toBe(32);
-    expect(r.result.height).toBe(24);
-    expect(r.result.png).toMatch(/^data:image\/png;base64,/);
-    const bytes = Buffer.from(r.result.png.split(",")[1] ?? "", "base64");
-    expect([...bytes.subarray(0, 8)]).toEqual(PNG_MAGIC);
+    expect(r.result).toBe(4);
     expect(typeof r.ms).toBe("number");
   });
 
-  it("clamps an over-large request rather than attempting it", async () => {
-    const r = await handler({ width: 99999, height: 99999, iterations: 10_000_000 });
+  it("captures console.log", async () => {
+    const r = await handler({ code: "console.log('hello'); return null" });
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error(r.error);
-
-    expect(r.result.width).toBeLessThanOrEqual(1024);
-    expect(r.result.height).toBeLessThanOrEqual(1024);
-    expect(r.result.iterations).toBeLessThanOrEqual(5000);
+    expect(r.logs).toContain("hello");
   });
 
-  it("rejects a malformed request readably", async () => {
-    const r = await handler({ width: "big", height: 10, iterations: 10 });
+  it("reports a thrown error readably instead of crashing", async () => {
+    const r = await handler({ code: "throw new Error('boom')" });
     expect(r.ok).toBe(false);
-    if (r.ok) throw new Error("expected a rejection");
-
-    expect(r.error).toMatch(/width|number|invalid/i);
+    if (r.ok) throw new Error("expected a failure");
+    expect(r.error).toMatch(/boom/);
   });
 
-  it("BR-EXM-108: a `code` field is ignored, never executed", async () => {
-    const r = await handler({ code: "throw new Error('should never run')", width: 8, height: 8, iterations: 10 });
+  it("serialises undefined as null", async () => {
+    const r = await handler({ code: "const x = 1;" });
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error(r.error);
+    expect(r.result).toBeNull();
+  });
 
-    expect(r.result.width).toBe(8);
+  it("runs the shipped Mandelbrot snippet to a real PNG (the default the console opens on)", async () => {
+    const { DEFAULT_SNIPPET } = (await import("../runner/snippet.mjs")) as unknown as { DEFAULT_SNIPPET: string };
+    const r = await handler({ code: DEFAULT_SNIPPET });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(String(r.result)).toMatch(/^data:image\/png;base64,/);
+    const bytes = Buffer.from(String(r.result).split(",")[1] ?? "", "base64");
+    expect([...bytes.subarray(0, 8)]).toEqual(PNG_MAGIC);
+  });
+});
+
+describe("FR-EXM-122 general-purpose JavaScript", () => {
+  it("has fetch available (network calls are a wanted capability, not an accident)", async () => {
+    const r = await handler({ code: "return typeof fetch" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.result).toBe("function");
+  });
+
+  it("sorts, maps and does ordinary JS", async () => {
+    const r = await handler({ code: "return [3,1,2].sort((a,b)=>a-b).map(n => n * 10)" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.result).toEqual([10, 20, 30]);
+  });
+
+  it("awaits promises", async () => {
+    const r = await handler({ code: "const v = await Promise.resolve(21); return v * 2" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.result).toBe(42);
+  });
+
+  it("can use node builtins via require (works in vitest, node and Lambda alike)", async () => {
+    const r = await handler({ code: "const { createHash } = require('node:crypto'); return createHash('sha256').update('elapse').digest('hex').slice(0, 8)" });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(String(r.result)).toMatch(/^[0-9a-f]{8}$/);
   });
 });

@@ -6,46 +6,20 @@ import { InvokeCommand } from "@aws-sdk/client-lambda";
  * seam for tests and CI (BR-EXM-108: code never runs in this process).
  */
 
-/** The structured request the runner accepts. It clamps these; we never send code. */
-export interface RunInput {
-  width: number;
-  height: number;
-  iterations: number;
-  centreX?: number;
-  centreY?: number;
-  scale?: number;
-}
-
-export interface RunTile {
-  /** `data:image/png;base64,…` */
-  png: string;
-  width: number;
-  height: number;
-  iterations: number;
-}
-
 export type RunResult =
-  | { ok: true; result: RunTile; ms: number; logs: string[] }
+  /** `result` is whatever the submitted code returned; a `data:image` string renders as an image. */
+  | { ok: true; result: unknown; ms: number; logs: string[] }
   | { ok: false; error: string; ms: number; logs: string[] };
 
 export interface Executor {
-  run(input: RunInput): Promise<RunResult>;
+  run(code: string): Promise<RunResult>;
 }
-
-/** A 1x1 PNG, so the mock is deterministic and needs no renderer of its own. */
-const STUB_PNG =
-  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
 /** Deterministic, no network. Used only in tests/CI (LAMBDA_RUNNER_MODE=mock). */
 export function mockRunner(): Executor {
   return {
-    async run(input: RunInput): Promise<RunResult> {
-      return {
-        ok: true,
-        result: { png: STUB_PNG, width: input.width, height: input.height, iterations: input.iterations },
-        ms: 0,
-        logs: [],
-      };
+    async run(code: string): Promise<RunResult> {
+      return { ok: true, result: `[mock] ${code.trim().slice(0, 60)}`, ms: 0, logs: [] };
     },
   };
 }
@@ -65,10 +39,10 @@ export interface Invoker {
 /** Invokes the real Lambda runner (FR-EXM-122) and returns its RunResult. */
 export function awsRunner(opts: { client: Invoker; fnName: string }): Executor {
   return {
-    async run(input: RunInput): Promise<RunResult> {
+    async run(code: string): Promise<RunResult> {
       const command = new InvokeCommand({
         FunctionName: opts.fnName,
-        Payload: new TextEncoder().encode(JSON.stringify(input)),
+        Payload: new TextEncoder().encode(JSON.stringify({ code })),
       });
       let resp;
       try {
