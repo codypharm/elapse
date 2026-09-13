@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { createServer as createHttpServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Executor } from "./executor";
 import { handleWebhook, type SessionStore } from "./webhooks";
+import { DEFAULT_SNIPPET } from "../runner/snippet.mjs";
 
 /**
  * FR-EXM-110–120: the merchant's HTTP server on Node's built-in module (no framework, so the
@@ -32,11 +33,7 @@ const CONSOLE = asset("console.html");
 const CANCEL = asset("cancel.html");
 const STYLE = asset("northwind.css");
 const RUNNER_SOURCE = readFileSync(new URL("../runner/index.mjs", import.meta.url), "utf8");
-const DEFAULT_SNIPPET = readFileSync(new URL("../runner/snippet.mjs", import.meta.url), "utf8")
-  .replace(/^[\s\S]*?export const DEFAULT_SNIPPET = `/, "")
-  .replace(/`;\s*$/, "")
-  .replace(/\\`/g, "`")
-  .replace(/\\\$/g, "$");
+
 const MERCHANT = "Northwind Compute";
 const escapeHtml = (v: string) => v.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 const fill = (tpl: string, vars: Record<string, string>) => tpl.replace(/\{\{(\w+)\}\}/g, (_, k: string) => escapeHtml(vars[k] ?? ""));

@@ -8,9 +8,10 @@ invocation — and the session **starts and ends by itself**: your first Run ope
 closes when you walk away, go idle, or hit the cap.
 
 Anything JavaScript can do works: `fetch` calls, sorting, `require("node:crypto")`, async. The
-editor opens on a Mandelbrot renderer because it is deliberately CPU-bound — ask for more pixels
-or more iterations and you burn more Lambda seconds, which is what makes the per-second meter
-legible — but it is only a starting snippet, not a limit.
+editor opens on a hello-world, so the first Run is immediate. For something that actually burns
+compute, paste `MANDELBROT_SNIPPET` from `runner/snippet.mjs`: it renders a tile, and asking for
+more pixels or more iterations costs more Lambda seconds — which is what makes the per-second
+meter legible.
 
 It is the advanced Elapse example. Unlike [`examples/saas`](../saas), which you clone and run
 with two keys, this one needs an AWS account and a deployed runner
@@ -166,7 +167,7 @@ Read this before pointing anyone else at it.
 
 ```
 runner/index.mjs   the deployed Lambda: runs submitted JS, with require() for node builtins
-runner/snippet.mjs the Mandelbrot the editor opens on — ordinary submitted code, not a contract
+runner/snippet.mjs what the editor opens on (hello world) plus the heavier Mandelbrot example
 runner/index.d.mts its contract, so the tests typecheck against it
 src/config.ts      env, with a readable error naming anything missing
 src/executor.ts    run(input) — the real AWS runner, and a mock used only by tests/CI

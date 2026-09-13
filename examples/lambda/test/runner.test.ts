@@ -36,15 +36,25 @@ describe("FR-EXM-122 the runner executes submitted JavaScript", () => {
     expect(r.result).toBeNull();
   });
 
-  it("runs the shipped Mandelbrot snippet to a real PNG (the default the console opens on)", async () => {
+  it("runs the default snippet the console opens on", async () => {
     const { DEFAULT_SNIPPET } = (await import("../runner/snippet.mjs")) as unknown as { DEFAULT_SNIPPET: string };
     const r = await handler({ code: DEFAULT_SNIPPET });
+    expect(r.ok).toBe(true);
+    if (!r.ok) throw new Error(r.error);
+    expect(r.result).toBe("Hello, world!");
+    expect(r.logs).toContain("Hello from Lambda");
+  });
+
+  it("runs the heavier Mandelbrot example to a real PNG", async () => {
+    const { MANDELBROT_SNIPPET } = (await import("../runner/snippet.mjs")) as unknown as { MANDELBROT_SNIPPET: string };
+    const r = await handler({ code: MANDELBROT_SNIPPET });
     expect(r.ok).toBe(true);
     if (!r.ok) throw new Error(r.error);
     expect(String(r.result)).toMatch(/^data:image\/png;base64,/);
     const bytes = Buffer.from(String(r.result).split(",")[1] ?? "", "base64");
     expect([...bytes.subarray(0, 8)]).toEqual(PNG_MAGIC);
   });
+
 });
 
 describe("FR-EXM-122 general-purpose JavaScript", () => {

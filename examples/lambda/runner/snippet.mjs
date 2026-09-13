@@ -1,10 +1,20 @@
 /**
- * The snippet the console opens on (FR-EXM-122). It is ordinary submitted code — the runner
- * has no special knowledge of it — chosen because it is genuinely CPU-bound: ask for more
- * pixels or more iterations and you burn more Lambda seconds, which is what makes the
- * per-second meter legible. It returns a PNG data URI, which the console renders as an image.
+ * The JavaScript the console opens on (FR-EXM-122) — ordinary submitted code, not part of the
+ * runner's contract.
+ *
+ * DEFAULT_SNIPPET is deliberately trivial: it uses nothing but `console.log` and `return`, so it
+ * runs on any build of the runner. MANDELBROT_SNIPPET is the heavy one, kept because it is
+ * genuinely CPU-bound — ask for more pixels or iterations and you burn more Lambda seconds,
+ * which is what makes the per-second meter legible. It needs a runner that passes `require`.
  */
-export const DEFAULT_SNIPPET = `// Renders a Mandelbrot tile on real AWS Lambda and returns it as a PNG.
+
+export const DEFAULT_SNIPPET = `// Runs on real AWS Lambda. You pay for the seconds this session is open.
+console.log("Hello from Lambda");
+
+return "Hello, world!";
+`;
+
+export const MANDELBROT_SNIPPET = `// Renders a Mandelbrot tile on real AWS Lambda and returns it as a PNG.
 // More pixels or more iterations means more compute — and more seconds.
 const { deflateSync } = require("node:zlib");
 
