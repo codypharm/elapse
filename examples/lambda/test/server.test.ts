@@ -241,3 +241,48 @@ describe("FR-EXM-114 the console finds its session on the way back from Checkout
     expect(await res.json()).toEqual({ sub: "sub_4QeABC" });
   });
 });
+
+describe("FR-EXM-114 when the platform refuses to open a session", () => {
+  it("passes the platform's reason back readably instead of a generic 500", async () => {
+    const reason = "Set a payout address in Settings before creating checkout links.";
+    const { base } = await start({
+      createCheckoutSession: async () => {
+        throw new Error(reason);
+      },
+    });
+
+    const res = await run(base, "sub_none");
+    expect(res.status).toBe(502);
+    expect(res.headers.get("content-type")).toContain("application/json");
+    expect(await res.json()).toEqual({ error: reason });
+  });
+});
+
+describe("FR-EXM-117 a failed cancel is retried, then given up on", () => {
+  const windows = { idleTimeoutMs: 60_000, heartbeatStaleMs: 15_000 };
+
+  it("retries on the next sweep when the cancel fails, but does not hammer forever", async () => {
+    const attempts: string[] = [];
+    const { sessions, deps, lines } = await start({
+      cancelSubscription: async (sub: string) => {
+        attempts.push(sub);
+        throw new Error(`No such subscription: '${sub}'`);
+      },
+    });
+    sessions.applyOpen("sub_x", { startedAt: NOW, nowMs: NOW });
+    const later = NOW + 70_000;
+
+    await sweepOnce(deps, later, windows);
+    expect(attempts).toHaveLength(1);
+
+    // The defect this covers: the session used to stay flagged `canceling` after a failure,
+    // so it was never swept again and kept accruing until the escrow cap.
+    await sweepOnce(deps, later + 5_000, windows);
+    expect(attempts).toHaveLength(2);
+
+    // ...but a permanently failing cancel must not be retried every tick forever.
+    for (let i = 0; i < 10; i++) await sweepOnce(deps, later + 10_000 + i * 5_000, windows);
+    expect(attempts.length).toBeLessThanOrEqual(5);
+    expect(lines.some((l) => l.includes("giving up"))).toBe(true);
+  });
+});

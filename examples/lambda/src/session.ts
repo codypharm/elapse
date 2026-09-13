@@ -13,6 +13,7 @@ export interface Session {
   startedAt?: number;
   lastSeen: number;
   lastRun: number;
+  cancelAttempts?: number;
   secondsElapsed?: number;
   paidUsd?: string;
   updatedAt: number;
@@ -74,6 +75,7 @@ export function createSessionStore(opts: { dailyRunLimit: number }) {
         ...prev,
         active: true,
         canceling: false,
+        cancelAttempts: 0,
         ...(info.customer === undefined ? {} : { customer: info.customer }),
         startedAt: info.startedAt,
         lastSeen: info.nowMs,
@@ -117,6 +119,19 @@ export function createSessionStore(opts: { dailyRunLimit: number }) {
     markCanceling(sub: string): void {
       const prev = sessions.get(sub);
       if (prev) sessions.set(sub, { ...prev, canceling: true });
+    },
+
+    /**
+     * FR-EXM-117: a cancel attempt failed. Clear the in-flight guard so the next sweep tries
+     * again — a session whose cancel failed must not be left running and accruing — and return
+     * how many attempts have now failed, so the caller can stop after a few.
+     */
+    noteCancelFailure(sub: string): number {
+      const prev = sessions.get(sub);
+      if (!prev) return 0;
+      const cancelAttempts = (prev.cancelAttempts ?? 0) + 1;
+      sessions.set(sub, { ...prev, canceling: false, cancelAttempts });
+      return cancelAttempts;
     },
 
     /** FR-EXM-131: `subscription.canceled` / `invoice.payment_failed` — the meter has stopped. */

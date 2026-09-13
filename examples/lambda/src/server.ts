@@ -55,7 +55,16 @@ async function route(req: IncomingMessage, res: ServerResponse, deps: ServerDeps
     if (!deps.sessions.isActive(sub)) {
       // FR-EXM-114: no session yet — hand back a Checkout URL; the console redirects,
       // the subscriber authorises once, and the stashed code runs on return.
-      const session = await deps.createCheckoutSession();
+      let session;
+      try {
+        session = await deps.createCheckoutSession();
+      } catch (err) {
+        // The platform refuses for reasons a person can act on ("Set a payout address…"),
+        // so pass its sentence through instead of a blank 500 (FR-EXM-100).
+        const message = (err as Error).message || "could not open a session";
+        deps.log(`✗ checkout.sessions.create: ${message}`);
+        return send(res, 502, "application/json", JSON.stringify({ error: message }));
+      }
       return send(res, 409, "application/json", JSON.stringify({ needs_start: true, checkout_url: session.url }));
     }
     const { code } = JSON.parse(await readRaw(req)) as { code?: string };
@@ -174,8 +183,11 @@ function send(res: ServerResponse, status: number, type: string, body: string) {
   res.end(body);
 }
 
+/** How many times a failing `subscriptions.cancel` is retried before the sweep gives up. */
+const MAX_CANCEL_ATTEMPTS = 5;
+
 /**
- * FR-EXM-117/118: end a session server-side, at most once. The `canceling` flag is set before
+ * FR-EXM-117/118: end a session server-side, at most once while a cancel is in flight. The `canceling` flag is set before
  * the await so a second beacon or the next sweep tick cannot issue a second cancel while the
  * chain confirms; the `subscription.canceled` webhook is what finally closes it (BR-EXM-110).
  */
@@ -184,7 +196,20 @@ export async function endSession(sub: string, reason: "left" | "idle", deps: Ser
   if (!session?.active || session.canceling) return;
   deps.sessions.markCanceling(sub);
   deps.log(`⏹ auto-ended (${reason}) ${sub}`);
-  await deps.cancelSubscription(sub);
+  try {
+    await deps.cancelSubscription(sub);
+  } catch (err) {
+    // A failed cancel must not strand the session: clear the guard so the next sweep retries.
+    // Swallowing it here also stops one bad session aborting the rest of the sweep tick.
+    const message = (err as Error).message;
+    const attempts = deps.sessions.noteCancelFailure(sub);
+    if (attempts >= MAX_CANCEL_ATTEMPTS) {
+      deps.sessions.markCanceling(sub); // stop trying; the escrow cap is the backstop (FR-EXM-119)
+      deps.log(`✗ cancel ${sub} failed ${attempts}×, giving up: ${message}`);
+    } else {
+      deps.log(`✗ cancel ${sub} failed (attempt ${attempts}), will retry: ${message}`);
+    }
+  }
 }
 
 /**
