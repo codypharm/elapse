@@ -6,6 +6,10 @@
 <meta name="theme-color" content="#23262a">
 <title>Console · {{merchant}}</title>
 <link rel="stylesheet" href="/northwind.css">
+<!-- Pinned CDN assets, no bundler (FR-EXM-100). React 18.3.1 because React 19 ships no UMD build. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js" crossorigin></script>
 </head>
 <body>
 <main class="term">
@@ -19,16 +23,7 @@
     <span class="meter" id="meter"><span id="clock">00:00</span> · <span class="amt" id="amount">$0.00</span></span>
   </div>
 
-  <div class="screen">
-    <textarea id="code" spellcheck="false" aria-label="Code to run">return 2 + 2</textarea>
-  </div>
-
-  <div class="row">
-    <button class="key" id="run" type="button">Run</button>
-    <span class="meter"><small id="state">Not running — your first run opens the session</small></span>
-  </div>
-
-  <div class="screen"><pre id="out">Output appears here.</pre></div>
+  <div id="root"></div>
 
   <p class="note" id="note">The meter above is an estimate while you work. When the session closes you are shown the exact amount settled.</p>
 
@@ -37,63 +32,58 @@
 
 <script>
 (function () {
-  var RATE_MICRO = (function (r) {          // "0.002" -> 2000 micro-dollars, no parseFloat
+  var RATE_MICRO = (function (r) {          // "0.002" -> 2000 micro-dollars, never parseFloat
     var p = String(r).split("."), whole = p[0] || "0", frac = (p[1] || "").slice(0, 6);
     while (frac.length < 6) frac += "0";
     return parseInt(whole, 10) * 1000000 + parseInt(frac, 10);
   })("{{rate}}");
 
-  var code = document.getElementById("code"), run = document.getElementById("run");
-  var out = document.getElementById("out"), clock = document.getElementById("clock");
-  var amount = document.getElementById("amount"), state = document.getElementById("state");
-  var sub = null, startedAt = null, timer = null, beat = null, watch = null;
+  var DEFAULT_REQUEST = '{\n  "width": 480,\n  "height": 360,\n  "iterations": 800\n}';
+  var SOURCE_URL = "/runner-source";
 
-  function money(micro) {
-    var cents = Math.floor(micro / 10000);
-    return "$" + (cents / 100).toFixed(2);
-  }
+  var clock = document.getElementById("clock");
+  var amount = document.getElementById("amount");
+  var note = document.getElementById("note");
+
+  var sub = null, startedAt = null, timer = null, beat = null, watch = null;
+  var setStatus = function () {}, setOutput = function () {}, getRequest = function () { return DEFAULT_REQUEST; }, setRequest = function () {};
+
+  function money(micro) { return "$" + (Math.floor(micro / 10000) / 100).toFixed(2); }
+  function twoDp(a) { var p = String(a == null ? "0" : a).split("."); return (p[0] || "0") + "." + ((p[1] || "") + "00").slice(0, 2); }
+  function mmss(s) { var m = Math.floor(s / 60), ss = s % 60; return (m < 10 ? "0" : "") + m + ":" + (ss < 10 ? "0" : "") + ss; }
+
   function paint() {
     if (startedAt == null) return;
     var secs = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
-    var m = Math.floor(secs / 60), s = secs % 60;
-    clock.textContent = (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    clock.textContent = mmss(secs);
     amount.textContent = money(secs * RATE_MICRO);
   }
+
   function running(on) {
-    state.textContent = on ? "Running — walk away and it closes itself" : "Not running — your first run opens the session";
+    setStatus(on ? "Running — walk away and it closes itself" : "Not running — your first run opens the session");
     if (on && !timer) timer = setInterval(paint, 100);
     if (!on && timer) { clearInterval(timer); timer = null; }
-    if (on && !beat) beat = setInterval(function () { if (sub) navigator.sendBeacon ? navigator.sendBeacon("/heartbeat?sub=" + sub) : fetch("/heartbeat?sub=" + sub, { method: "POST" }); }, 5000);
+    if (on && !beat) beat = setInterval(function () {
+      if (sub) { navigator.sendBeacon ? navigator.sendBeacon("/heartbeat?sub=" + sub) : fetch("/heartbeat?sub=" + sub, { method: "POST" }); }
+    }, 5000);
     if (!on && beat) { clearInterval(beat); beat = null; }
   }
 
-  // Two decimals from a decimal string, without parseFloat on money.
-  function twoDp(amount) {
-    var p = String(amount == null ? "0" : amount).split(".");
-    return (p[0] || "0") + "." + ((p[1] || "") + "00").slice(0, 2);
-  }
-
-  // The session is over. Stop everything and show what was actually settled — not the estimate.
+  // The session is over. Stop everything and show what was actually settled, not the estimate.
   function ended(a) {
     running(false);
     if (watch) { clearInterval(watch); watch = null; }
     sub = null;
     var secs = a.seconds_elapsed || 0;
-    var m = Math.floor(secs / 60), ss = secs % 60;
-    clock.textContent = (m < 10 ? "0" : "") + m + ":" + (ss < 10 ? "0" : "") + ss;
+    clock.textContent = mmss(secs);
     amount.textContent = "$" + twoDp(a.paid_usd);
-    state.textContent = "Session ended — paid " + secs + "s · $" + twoDp(a.paid_usd);
-    document.getElementById("note").textContent =
-      "That is the exact amount settled, not the estimate. Press Run to open a new session.";
+    setStatus("Session ended — paid " + secs + "s · $" + twoDp(a.paid_usd));
+    note.textContent = "That is the exact amount settled, not the estimate. Press Run to open a new session.";
   }
 
-  // The server ends sessions by itself, so the page has to watch for it.
   async function poll() {
     if (!sub) return;
-    try {
-      var a = await (await fetch("/access/" + sub)).json();
-      if (!a.active) ended(a);
-    } catch (e) { /* transient; try again next tick */ }
+    try { var a = await (await fetch("/access/" + sub)).json(); if (!a.active) ended(a); } catch (e) { /* try again next tick */ }
   }
 
   async function adopt(id) {
@@ -101,8 +91,7 @@
     var a = await (await fetch("/access/" + id)).json();
     if (a.active) {
       startedAt = a.started_at ? a.started_at * 1000 : Date.now();
-      running(true);
-      paint();
+      running(true); paint();
       if (!watch) watch = setInterval(poll, 3000);
     } else if (a.reason === "ended") {
       ended(a);
@@ -110,8 +99,6 @@
     return a;
   }
 
-  // Coming back from Checkout: the success URL carries the checkout session id, and the
-  // completed webhook tells the server which subscription it became.
   async function resume() {
     var qs = new URLSearchParams(window.location.search);
     var cs = qs.get("session_id") || qs.get("session");
@@ -121,9 +108,9 @@
       if (r.ok) {
         var link = await r.json();
         await adopt(link.sub);
-        var stashed = sessionStorage.getItem("nw_code");
-        sessionStorage.removeItem("nw_code");
-        if (stashed) { code.value = stashed; await execute(); }
+        var stashed = sessionStorage.getItem("nw_req");
+        sessionStorage.removeItem("nw_req");
+        if (stashed) { setRequest(stashed); await execute(); }
         return;
       }
       await new Promise(function (rr) { setTimeout(rr, 500); });
@@ -131,28 +118,107 @@
   }
 
   async function execute() {
-    run.disabled = true;
-    out.textContent = "Running…";
+    var raw = getRequest(), input;
+    try { input = JSON.parse(raw); } catch (e) { setOutput({ error: "That is not valid JSON: " + e.message }); return; }
+    setOutput({ pending: true });
     try {
-      var res = await fetch("/run?sub=" + (sub || "none"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.value }) });
-      if (res.status === 409) {
-        var next = await res.json();                 // no session yet: authorise once, then come back
-        sessionStorage.setItem("nw_code", code.value);
-        window.location.href = next.checkout_url;
+      var res = await fetch("/run?sub=" + (sub || "none"), {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ input: input })
+      });
+      var body = await res.json();
+      if (res.status === 409) {                      // no session yet: authorise once, then come back
+        sessionStorage.setItem("nw_req", raw);
+        window.location.href = body.checkout_url;
         return;
       }
-      var body = await res.json();
-      if (res.status === 429) { out.textContent = body.error; out.className = "has"; return; }
-      out.textContent = body.ok ? (body.logs && body.logs.length ? body.logs.join("\n") + "\n" : "") + String(body.result) + "  (" + body.ms + "ms)" : body.error;
-      out.className = "has";
-    } finally {
-      run.disabled = false;
+      if (!res.ok) { setOutput({ error: body.error || ("request failed (" + res.status + ")") }); return; }
+      setOutput(body.ok ? { tile: body.result, ms: body.ms, logs: body.logs } : { error: body.error });
+    } catch (e) {
+      setOutput({ error: e.message });
     }
   }
 
-  run.addEventListener("click", function () { void execute(); });
+  // ---- React view -------------------------------------------------------
+  var e = window.React && window.React.createElement;
+
+  function Console() {
+    var R = window.React;
+    var status = R.useState("Not running — your first run opens the session");
+    var out = R.useState({});
+    var source = R.useState("");
+    var busy = R.useState(false);
+    var host = R.useRef(null), editor = R.useRef(null);
+
+    setStatus = status[1]; setOutput = out[1];
+
+    R.useEffect(function () {
+      fetch(SOURCE_URL).then(function (r) { return r.ok ? r.text() : ""; }).then(source[1]).catch(function () {});
+      window.require.config({ paths: { vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs" } });
+      window.require(["vs/editor/editor.main"], function () {
+        editor.current = window.monaco.editor.create(host.current, {
+          value: DEFAULT_REQUEST, language: "json", theme: "vs-dark",
+          minimap: { enabled: false }, automaticLayout: true, fontSize: 13, scrollBeyondLastLine: false
+        });
+        getRequest = function () { return editor.current.getValue(); };
+        setRequest = function (v) { editor.current.setValue(v); };
+        void resume();
+      });
+      return function () { if (editor.current) editor.current.dispose(); };
+    }, []);
+
+    var o = out[0];
+    return e("div", null,
+      e("p", { className: "note" }, "Ask the runner for a tile. More pixels or more iterations means more compute — and more seconds."),
+      e("div", { className: "screen", id: "editor", ref: host, style: { height: "190px", padding: 0 } }),
+      e("div", { className: "row" },
+        e("button", { className: "key", id: "run", type: "button", disabled: busy[0],
+          onClick: function () { busy[1](true); execute().finally(function () { busy[1](false); }); } }, "Run"),
+        e("span", { className: "meter" }, e("small", { id: "state" }, status[0]))
+      ),
+      e("div", { className: "screen" },
+        o.tile
+          ? e("div", null,
+              e("img", { src: o.tile.png, width: o.tile.width, height: o.tile.height, alt: "rendered tile",
+                style: { maxWidth: "100%", height: "auto", imageRendering: "pixelated", display: "block" } }),
+              e("pre", { id: "out", className: "has" },
+                o.tile.width + "×" + o.tile.height + " @ " + o.tile.iterations + " iterations · " + o.ms + "ms on Lambda" +
+                (o.logs && o.logs.length ? "\n" + o.logs.join("\n") : ""))
+            )
+          : e("pre", { id: "out", className: o.error ? "has" : "" },
+              o.pending ? "Rendering on Lambda…" : (o.error || "The rendered tile appears here."))
+      ),
+      e("details", null,
+        e("summary", { className: "note" }, "What the runner does (read-only)"),
+        e("pre", { id: "source", className: "screen" }, source[0] || "loading…")
+      )
+    );
+  }
+
+  if (window.React && window.ReactDOM) {
+    window.ReactDOM.createRoot(document.getElementById("root")).render(e(Console));
+  } else {
+    // CDN unreachable: plain textarea fallback, same contract (FR-EXM-111).
+    var root = document.getElementById("root");
+    root.innerHTML =
+      '<div class="screen"><textarea id="editor" spellcheck="false" aria-label="Request JSON"></textarea></div>' +
+      '<div class="row"><button class="key" id="run" type="button">Run</button>' +
+      '<span class="meter"><small id="state">Not running — your first run opens the session</small></span></div>' +
+      '<div class="screen"><pre id="out">The rendered tile appears here.</pre></div>' +
+      '<pre id="source" class="screen" hidden></pre>';
+    var ta = document.getElementById("editor"), st = document.getElementById("state"), ou = document.getElementById("out");
+    ta.value = DEFAULT_REQUEST;
+    getRequest = function () { return ta.value; };
+    setRequest = function (v) { ta.value = v; };
+    setStatus = function (t) { st.textContent = t; };
+    setOutput = function (o) {
+      if (o.tile) { ou.textContent = o.tile.width + "×" + o.tile.height + " · " + o.ms + "ms on Lambda"; ou.className = "has"; }
+      else ou.textContent = o.pending ? "Rendering on Lambda…" : (o.error || "");
+    };
+    document.getElementById("run").addEventListener("click", function () { void execute(); });
+    void resume();
+  }
+
   window.addEventListener("pagehide", function () { if (sub && navigator.sendBeacon) navigator.sendBeacon("/end?sub=" + sub); });
-  void resume();
 })();
 </script>
 </body>
