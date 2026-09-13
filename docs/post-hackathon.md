@@ -27,6 +27,7 @@ the spec that owns it is updated in the same change.
 | **Delivery rate limiting per endpoint** (e.g. max 20 in flight). Not needed at MVP volume. | — | [`specs/worker-frd.md`](./specs/worker-frd.md) |
 | **Mera wallet.** Privy only for subscribers; Mera revisited after submission. | — | [`architecture.md`](./architecture.md) |
 | **Merchant-set cap in the dashboard.** `max_duration_seconds` is API-only; the dashboard's checkout link always leaves the cap to the subscriber. Defensible, but worth deciding on its own merits rather than by omission. | Raised 2026-09-11, William | This page |
+| **One-tap "Get testnet AUSD" on the Add funds step.** With MockUSD removed no mode is self-serve; a faucet button (our API relays `requestFunds` to the subscriber's wallet) would restore a judge's solo checkout at the cost of a user path through the undocumented faucet and its 60 s global cooldown. Until then the judge pass is a driven demo with pre-funded wallets. | 2026-09-13, William (grill Q5, option A) | [ADR 2026-09-13](./decisions/2026-09-13-ausd-only-mockusd-to-test-fixture.md) |
 
 ## Operational
 
@@ -34,7 +35,7 @@ the spec that owns it is updated in the same change.
 | --- | --- |
 | **Mainnet.** The submission runs on Monad testnet 10143. Live mode moves to chain 143 and mainnet AUSD `0x00000000eFE302BEAA2b3e6e1b18d08D69a9012a` afterwards; MockUSD never leaves testnet. | [ADR 2026-09-07](./decisions/2026-09-07-add-money-and-ausd-live-on-testnet.md) |
 | **`hello@elapse.finance` has no inbox.** The dashboard settings links point at it. William sets one up after the hackathon, probably Zoho. Do not build a contact form or change the address before then. | William, 2026-09-09 |
-| **Testnet AUSD depends on an undocumented faucet.** Agora's `requestFunds` on Monad testnet funds team and demo wallets. If it empties or disappears the fallback is MockUSD plus a direct request to Agora; no user-facing path depends on it. | [ADR 2026-09-11](./decisions/2026-09-11-testnet-ausd-from-agora-faucet.md) |
+| **Testnet AUSD depends on an undocumented faucet.** Agora's `requestFunds` on Monad testnet funds team and demo wallets. If it empties or disappears the fallback is a direct request to Agora; no *platform* code path depends on it (reaffirmed 2026-09-13 — MockUSD is a test fixture now, so the faucet also fills the holding wallet that pre-funds demo subscriber wallets; check its AUSD alongside relayer MON before demos). The docs' Testing page names it as the self-serve source of testnet AUSD (William, 2026-09-13), so if it dies the page needs a new answer. | [ADR 2026-09-11](./decisions/2026-09-11-testnet-ausd-from-agora-faucet.md) |
 
 ## Revision
 
@@ -43,3 +44,4 @@ the spec that owns it is updated in the same change.
 | 2026-09-11 | Claude (for William) | Created after the first live-mode run on the hosted app. Collected the items already deferred across the FRDs and ADRs, and added the four findings from that run. |
 | 2026-09-11 | Claude (for William) | Docs gap fixed, so removed: the quickstart's first step now says an `export` lasts only as long as the terminal and to put both variables in `.env` and the host's environment settings. |
 | 2026-09-11 | Claude (for William) | CLI version banner fixed, so removed: `listen.ts` had a hardcoded `0.1.0` and the test fixture pinned it, which is how it drifted. The banner now reads `CLI_VERSION`, the test asserts the running version, and `cli-listen.mdx` on the docs site regenerated to 0.1.2. |
+| 2026-09-13 | Claude (for William) | AUSD-only decision ([ADR](./decisions/2026-09-13-ausd-only-mockusd-to-test-fixture.md)): added the deferred faucet-button candidate, updated the faucet note — MockUSD is no longer a fallback and demo wallets are pre-funded from the holding wallet. |

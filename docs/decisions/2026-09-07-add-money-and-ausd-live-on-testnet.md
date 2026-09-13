@@ -1,5 +1,5 @@
 # Add money on the checkout when the wallet is short; live mode escrows AUSD on testnet
-2026-09-07 · Decided by William · Status: accepted
+2026-09-07 · Decided by William · Status: accepted (token-per-mode clauses superseded by [2026-09-13 AUSD only](./2026-09-13-ausd-only-mockusd-to-test-fixture.md))
 
 ## Context
 The permit model ([ADR 2026-09-04](./2026-09-04-subscriber-permit-relayer-signs.md)) left "how

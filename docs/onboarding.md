@@ -58,7 +58,7 @@ Six-week plan in the detailed doc §12. The gates that matter:
 - **Week 2 —** API keys, `products.create`, `checkout.sessions.create`, signed POST, `constructEvent` unit-tested.
 - **Week 3 —** hosted checkout with Privy; docs shell; Envio → ingest → worker.
 - **Week 4 —** dashboard keys/deliveries/resend; CLI listen; full event catalog; OpenAPI in docs.
-- **Week 5 —** live mode on testnet with `MockUSD` (both modes, one factory); relayer gets its own wallet; TypeScript SDK only. Mainnet and real AUSD are post-submission ([ADR 2026-09-07](./decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md), [ADR 2026-09-07 SDK](./decisions/2026-09-07-sdk-typescript-only-for-submission.md)).
+- **Week 5 —** live mode on testnet (both modes, one factory); relayer gets its own wallet; TypeScript SDK only. Mainnet is post-submission ([ADR 2026-09-07](./decisions/2026-09-07-submission-on-testnet-live-mode-mockusd.md), [ADR 2026-09-07 SDK](./decisions/2026-09-07-sdk-typescript-only-for-submission.md)). Since 2026-09-13 both modes escrow testnet AUSD and MockUSD is a test fixture ([ADR AUSD only](./decisions/2026-09-13-ausd-only-mockusd-to-test-fixture.md)).
 - **Week 6 —** video = demo script; judges can clone `examples/saas` and receive a webhook. **Submit 13 Oct.**
 
 ## Useful paths
@@ -102,5 +102,5 @@ Order that unblocks the most first: Resend records (mail delivers to anyone), do
 ## Before a demo
 
 - The relayer wallet pays every start, cancel and settlement on testnet, in both modes. Check its MON balance first; a dry relayer answers "We can't start meters right now" on Start. Top up at https://faucet.monad.xyz.
-- The relayer is a separate wallet from the factory owner and treasury (`0xaf1444aBF40aFC91Bcb4A6793765553c6BcceA0d`). The owner wallet needs no MON unless you change the fee or the keeper; its `MockUSD` balance rising after a run is the sanity check that fees flow.
+- The relayer is a separate wallet from the factory owner and treasury (`0xaf1444aBF40aFC91Bcb4A6793765553c6BcceA0d`). The owner wallet needs no MON unless you change the fee or the keeper; its AUSD balance rising after a run is the sanity check that fees flow.
 - `grep keeper_batch_no_effect` on the worker log must be empty (FR-WRK-072): that line means settle transactions are burning gas for nothing.

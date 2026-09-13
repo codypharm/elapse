@@ -1,5 +1,5 @@
 # The 13 October submission runs on Monad testnet; live mode points at testnet too; the relayer gets its own wallet now
-2026-09-07 · Decided by William · Status: accepted
+2026-09-07 · Decided by William · Status: accepted (token-per-mode clauses superseded by [2026-09-13 AUSD only](./2026-09-13-ausd-only-mockusd-to-test-fixture.md))
 
 ## Context
 The detailed doc's six-week plan puts a mainnet factory and real AUSD in Week 5, and the API
