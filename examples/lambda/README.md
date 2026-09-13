@@ -2,14 +2,15 @@
 
 ## What this is
 
-A merchant that rents you a **live compute session**. You describe a tile you want rendered,
-press Run, and a real AWS Lambda renders it. You pay for the seconds your session is **open** —
-not per invocation — and the session **starts and ends by itself**: your first Run opens it, and
-it closes when you walk away, go idle, or hit the cap.
+A merchant that rents you a **live compute session**. You write JavaScript, press Run, and it
+executes on a real AWS Lambda. You pay for the seconds your session is **open** — not per
+invocation — and the session **starts and ends by itself**: your first Run opens it, and it
+closes when you walk away, go idle, or hit the cap.
 
-The workload is deliberately CPU-bound: it renders a Mandelbrot tile, and the time it takes
-scales with the resolution and iteration count you ask for. That is what makes per-second
-billing legible — ask for more detail, burn more compute, watch the meter.
+Anything JavaScript can do works: `fetch` calls, sorting, `require("node:crypto")`, async. The
+editor opens on a Mandelbrot renderer because it is deliberately CPU-bound — ask for more pixels
+or more iterations and you burn more Lambda seconds, which is what makes the per-second meter
+legible — but it is only a starting snippet, not a limit.
 
 It is the advanced Elapse example. Unlike [`examples/saas`](../saas), which you clone and run
 with two keys, this one needs an AWS account and a deployed runner
@@ -35,8 +36,8 @@ The gap between them is the merchant's margin.
 
 ## Provision the runner
 
-Two resources, once. The runner takes **structured input only** — it never executes anything you
-send it — so its role still carries nothing beyond writing its own logs.
+Two resources, once. The runner **executes the JavaScript you send it**, so its role is given
+nothing beyond writing its own logs — that role is the boundary, and it matters.
 
 ```sh
 # 1. A role only Lambda can assume, with logs-only access and no other AWS permissions.
@@ -74,13 +75,13 @@ aws lambda update-function-configuration --function-name elapse-lambda-runner \
   --timeout 10 --memory-size 1024 --region us-east-1
 ```
 
-Confirm it renders before going further:
+Confirm it executes before going further:
 
 ```sh
 aws lambda invoke --function-name elapse-lambda-runner --region us-east-1 \
   --cli-binary-format raw-in-base64-out \
-  --payload '{"width":64,"height":48,"iterations":200}' /dev/stdout
-# {"ok":true,"result":{"png":"data:image/png;base64,…","width":64,…},"ms":…}
+  --payload '{"code":"return 2 + 2"}' /dev/stdout
+# {"ok":true,"result":4,"ms":…,"logs":[]}
 ```
 
 Real invocations show up in CloudWatch Logs as Lambda's own `START` / `END` / `REPORT` lines —
@@ -111,14 +112,15 @@ Webhooks: POST http://localhost:3000/webhooks
 Runner:   elapse-lambda-runner @ us-east-1
 
 14:02:11  evt_…  subscription.created   → session open sub_…
-14:02:19  ▶ run sub_…  480x360 @ 800 iterations  (1.8s)   [1/20 today]
+14:02:19  ▶ run sub_…  return 2 + 2  → 4  (9ms)   [1/20 today]
 14:03:20  ⏹ auto-ended (idle) sub_…
 14:03:21  evt_…  subscription.canceled  → session closed · 62s · $0.12
 14:03:25  ▶ run sub_…  → 409 needs_start
 ```
 
-The console is a React page with the **VS Code editor** (Monaco) holding the JSON request, the
-runner's own source read-only beneath it, and the rendered tile as output. There is no Start
+The console is a React page with the **VS Code editor** (Monaco) holding the JavaScript, the
+runner's own source read-only beneath it, and the result as output — rendered as an image when
+the code returns a `data:image` string, printed as a value otherwise. There is no Start
 button and no Stop button: press Run and the first one sends you through Elapse Checkout for a
 single Face ID authorisation, then the render runs and the meter starts. Close the tab and the
 session ends within seconds. React and Monaco load from a pinned CDN — there is no bundler, and
@@ -140,16 +142,21 @@ ends is the **settled** amount from the webhook.
 
 ## Security
 
-- The runner **never executes caller-supplied code**. It accepts `{ width, height, iterations }`,
-  clamps them, and renders. A `code` field in the request is ignored. This is the main reason the
-  example is safe to point at strangers in a way an eval-based runner never was.
-- Its IAM role carries **logs-only** access and nothing else, so even a bug in the renderer
-  reaches no other AWS service.
-- Inputs are **clamped** (max 1024×1024 at 5000 iterations) so one request cannot outrun the
-  function's 10s timeout or its response-payload budget.
+Read this before pointing anyone else at it.
+
+- The runner **executes arbitrary JavaScript you submit**, inside AWS Lambda's per-invocation
+  microVM. That is the product, not an accident.
+- **Outbound network access is deliberate.** `fetch` works from inside submitted code. That is a
+  capability this example intends to offer, so treat the runner as able to reach the internet.
+- What holds the line is the execution role: it carries **logs-only** access and nothing else, so
+  submitted code cannot reach any other AWS service in your account.
+- A Lambda outside a VPC keeps that outbound access, and `new Function` is not a security
+  sandbox. This is a **demo runner, not a hardened sandbox for hostile users**. Do not expose it
+  publicly as-is. If you need isolation from the network, put the function in a VPC with no NAT.
 - Cost guards, in order: a hard **20 executions per UTC day** (`DAILY_RUN_LIMIT`), checked before
-  any AWS call; the 10s timeout; and your account's concurrency ceiling. Worst case is roughly
-  20 × 10s × 1024MB ≈ **205 GB-s per day**, comfortably inside the 400,000 GB-s monthly free tier.
+  any AWS call; the **10s timeout**, which also bounds a runaway loop; and your account's
+  concurrency ceiling. Worst case ≈ 20 × 10s × 1024MB ≈ **205 GB-s per day**, comfortably inside
+  the 400,000 GB-s monthly free tier.
 - A session's maximum charge is `rate × MAX_DURATION_SECONDS` — by default 1 hour, about
   **$7.20** — enforced on-chain even if the server dies and every auto-end path fails.
 - AWS credentials come from the standard SDK chain, never from `.env`, and are never logged.
@@ -158,7 +165,8 @@ ends is the **settled** amount from the webhook.
 ## Files
 
 ```
-runner/index.mjs   the deployed Lambda: renders a Mandelbrot tile, PNG via node:zlib, zero deps
+runner/index.mjs   the deployed Lambda: runs submitted JS, with require() for node builtins
+runner/snippet.mjs the Mandelbrot the editor opens on — ordinary submitted code, not a contract
 runner/index.d.mts its contract, so the tests typecheck against it
 src/config.ts      env, with a readable error naming anything missing
 src/executor.ts    run(input) — the real AWS runner, and a mock used only by tests/CI
