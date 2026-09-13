@@ -55,6 +55,7 @@ interface SubObject {
   id?: string;
   customer?: string;
   status?: string;
+  subscription?: string;
   started_at?: number;
   seconds_elapsed?: number;
   rate_usd_per_second?: string;
@@ -87,8 +88,11 @@ function apply(event: { type: string; data: { object: unknown } }, deps: Webhook
   const nowMs = deps.now();
 
   switch (event.type) {
-    case "checkout.session.completed":
+    case "checkout.session.completed": {
+      // The session id and the subscription it became arrive together (§5.3).
+      if (o.id && o.subscription) deps.sessions.linkCheckout(o.id, o.subscription);
       return "provision session";
+    }
     case "subscription.created": {
       const startedAt = o.started_at ? o.started_at * 1000 : nowMs;
       deps.sessions.applyOpen(sub, { ...(o.customer ? { customer: o.customer } : {}), startedAt, nowMs });

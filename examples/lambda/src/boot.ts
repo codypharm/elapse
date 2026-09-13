@@ -1,0 +1,109 @@
+import { LambdaClient } from "@aws-sdk/client-lambda";
+import { Elapse } from "@elapse/sdk";
+import type { AddressInfo } from "node:net";
+import type { Config } from "./config";
+import { awsRunner, mockRunner, type Executor } from "./executor";
+import { createServer, sweepOnce, type ServerDeps } from "./server";
+import { createSessionStore } from "./session";
+
+/**
+ * FR-EXM-102: what `npm start` does. Find or create the Product, wire the runner and the
+ * auto-end sweep, listen. Unlike the saas example it opens no Checkout session here: a session
+ * is created on demand by the subscriber's first Run (FR-EXM-114), because there is no Start
+ * button to hand one to.
+ */
+
+export const PRODUCT = { name: "Serverless runtime", rateUsdPerSecond: "0.002" } as const;
+
+/** How often the server looks for sessions that should end themselves (FR-EXM-117). */
+const SWEEP_INTERVAL_MS = 5_000;
+
+export interface BootIO {
+  /** The startup lines a judge reads. */
+  out: (line: string) => void;
+  /** The per-Event and per-run log. */
+  log: (line: string) => void;
+  logJson?: boolean;
+  /** `mock` is the tests/CI seam (FR-EXM-121); real runs always use the AWS runner. */
+  runnerMode?: "aws" | "mock";
+}
+
+export async function boot(config: Config, io: BootIO) {
+  const elapse = new Elapse({ secretKey: config.secretKey, baseUrl: config.apiUrl });
+
+  // region:product
+  const existing = (await elapse.products.list({ limit: 100 })).data.find((p) => p.name === PRODUCT.name && p.active);
+  const product = existing ?? (await elapse.products.create({ name: PRODUCT.name, rateUsdPerSecond: PRODUCT.rateUsdPerSecond }));
+  // endregion
+
+  let executor: Executor;
+  if (io.runnerMode === "mock") {
+    executor = mockRunner();
+  } else {
+    const lambda = new LambdaClient({ region: config.awsRegion });
+    executor = awsRunner({ client: { send: (command) => lambda.send(command) }, fnName: config.lambdaFn });
+  }
+
+  const sessions = createSessionStore({ dailyRunLimit: config.dailyRunLimit });
+
+  const deps: ServerDeps = {
+    sessions,
+    executor,
+    webhookSecret: config.webhookSecret,
+    log: io.log,
+    ...(io.logJson === undefined ? {} : { logJson: io.logJson }),
+    // region:cap
+    // FR-EXM-119: the cap the subscriber authorises once. rate x maxDurationSeconds is the most
+    // this session can ever cost, enforced on-chain even if every auto-end path fails.
+    createCheckoutSession: async () => {
+      const session = await elapse.checkout.sessions.create({
+        product: product.id,
+        successUrl: `${config.baseUrl}/console`,
+        cancelUrl: `${config.baseUrl}/cancel`,
+        maxDurationSeconds: config.maxDurationSeconds,
+      });
+      return { id: session.id, url: session.url };
+    },
+    // endregion
+    // region:end
+    // BR-EXM-110: the server ends the session; the canceled webhook confirms it.
+    cancelSubscription: async (sub) => {
+      await elapse.subscriptions.cancel(sub);
+    },
+    // endregion
+    product: { name: product.name, rateUsdPerSecond: product.rate_usd_per_second },
+    now: () => Date.now(),
+  };
+
+  const server = createServer(deps);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", (err: NodeJS.ErrnoException) =>
+      reject(new Error(err.code === "EADDRINUSE" ? `EADDRINUSE: port ${config.port} is already in use. Set PORT in .env.` : err.message)),
+    );
+    server.listen(config.port, resolve);
+  });
+  const port = (server.address() as AddressInfo).port;
+
+  const windows = { idleTimeoutMs: config.idleTimeoutSeconds * 1000, heartbeatStaleMs: config.heartbeatStaleSeconds * 1000 };
+  const sweep = setInterval(() => {
+    void sweepOnce(deps, Date.now(), windows).catch((err: Error) => io.log(`✗ sweep: ${err.message}`));
+  }, SWEEP_INTERVAL_MS);
+  sweep.unref?.();
+
+  io.out(`Product:  ${product.id}  ${product.name}  $${product.rate_usd_per_second}/s`);
+  io.out(`Webhooks: POST ${config.baseUrl}/webhooks`);
+  io.out(`Runner:   ${config.lambdaFn} @ ${config.awsRegion}`);
+  io.out(`Listening on :${port}`);
+
+  return {
+    server,
+    product,
+    sessions,
+    port,
+    close: () =>
+      new Promise<void>((r) => {
+        clearInterval(sweep);
+        server.close(() => r());
+      }),
+  };
+}

@@ -19,3 +19,10 @@ export const created = (over: Record<string, unknown> = {}, id?: string) =>
 
 export const canceled = (over: Record<string, unknown> = {}, id?: string) =>
   event("subscription.canceled", { ...SUB, status: "canceled", seconds_elapsed: 62, amount_settled: "0.12", ...over }, id);
+
+export const completed = (over: Record<string, unknown> = {}, id?: string) =>
+  event(
+    "checkout.session.completed",
+    { id: "cs_7Ha", object: "checkout.session", status: "complete", subscription: "sub_4QeABC", customer: "cus_7Ha", ...over },
+    id ?? "evt_completed",
+  );

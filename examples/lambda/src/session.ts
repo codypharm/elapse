@@ -25,6 +25,7 @@ export function createSessionStore(opts: { dailyRunLimit: number }) {
   let runCount = 0;
   const seen = new Set<string>();
   const sessions = new Map<string, Session>();
+  const checkouts = new Map<string, string>();
 
   return {
     /** FR-EXM-140: consume one run against the UTC-day cap; false when the day is spent. */
@@ -44,6 +45,18 @@ export function createSessionStore(opts: { dailyRunLimit: number }) {
       if (seen.has(evtId)) return true;
       seen.add(evtId);
       return false;
+    },
+
+    /**
+     * FR-EXM-114: which Subscription a Checkout session became. The console polls this on the
+     * way back from Checkout, because the subscription does not exist until the meter starts.
+     */
+    linkCheckout(checkoutId: string, sub: string): void {
+      checkouts.set(checkoutId, sub);
+    },
+
+    subForCheckout(checkoutId: string): string | undefined {
+      return checkouts.get(checkoutId);
     },
 
     get(sub: string): Session | undefined {
@@ -70,7 +83,7 @@ export function createSessionStore(opts: { dailyRunLimit: number }) {
     },
 
     /**
-    7p * FR-EXM-116: record activity. Every console heartbeat refreshes presence (`lastSeen`);
+     * FR-EXM-116: record activity. Every console heartbeat refreshes presence (`lastSeen`);
      * only a Run also refreshes `lastRun`, which is what the idle timeout measures.
      */
     touch(sub: string, nowMs: number, opts?: { run?: boolean }): void {

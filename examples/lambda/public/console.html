@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#23262a">
+<title>Console · {{merchant}}</title>
+<link rel="stylesheet" href="/northwind.css">
+</head>
+<body>
+<main class="term">
+  <header class="id">
+    <a class="mark" href="/">North<b>wind</b></a>
+    <span class="loc">Field terminal<br>Unit 07</span>
+  </header>
+
+  <div class="label">
+    <span class="k">Session</span>
+    <span class="meter" id="meter"><span id="clock">00:00</span> · <span class="amt" id="amount">$0.00</span></span>
+  </div>
+
+  <div class="screen">
+    <textarea id="code" spellcheck="false" aria-label="Code to run">return 2 + 2</textarea>
+  </div>
+
+  <div class="row">
+    <button class="key" id="run" type="button">Run</button>
+    <span class="meter"><small id="state">Not running — your first run opens the session</small></span>
+  </div>
+
+  <div class="screen"><pre id="out">Output appears here.</pre></div>
+
+  <p class="note" id="note">The meter above is an estimate while you work. When the session closes you are shown the exact amount settled.</p>
+
+  <footer class="tag">{{merchant}} · demo merchant</footer>
+</main>
+
+<script>
+(function () {
+  var RATE_MICRO = (function (r) {          // "0.002" -> 2000 micro-dollars, no parseFloat
+    var p = String(r).split("."), whole = p[0] || "0", frac = (p[1] || "").slice(0, 6);
+    while (frac.length < 6) frac += "0";
+    return parseInt(whole, 10) * 1000000 + parseInt(frac, 10);
+  })("{{rate}}");
+
+  var code = document.getElementById("code"), run = document.getElementById("run");
+  var out = document.getElementById("out"), clock = document.getElementById("clock");
+  var amount = document.getElementById("amount"), state = document.getElementById("state");
+  var sub = null, startedAt = null, timer = null, beat = null;
+
+  function money(micro) {
+    var cents = Math.floor(micro / 10000);
+    return "$" + (cents / 100).toFixed(2);
+  }
+  function paint() {
+    if (startedAt == null) return;
+    var secs = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    var m = Math.floor(secs / 60), s = secs % 60;
+    clock.textContent = (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+    amount.textContent = money(secs * RATE_MICRO);
+  }
+  function running(on) {
+    state.textContent = on ? "Running — walk away and it closes itself" : "Not running — your first run opens the session";
+    if (on && !timer) timer = setInterval(paint, 100);
+    if (!on && timer) { clearInterval(timer); timer = null; }
+    if (on && !beat) beat = setInterval(function () { if (sub) navigator.sendBeacon ? navigator.sendBeacon("/heartbeat?sub=" + sub) : fetch("/heartbeat?sub=" + sub, { method: "POST" }); }, 5000);
+    if (!on && beat) { clearInterval(beat); beat = null; }
+  }
+
+  async function adopt(id) {
+    sub = id;
+    var a = await (await fetch("/access/" + id)).json();
+    if (a.active) { startedAt = a.started_at ? a.started_at * 1000 : Date.now(); running(true); paint(); }
+    return a;
+  }
+
+  // Coming back from Checkout: the success URL carries the checkout session id, and the
+  // completed webhook tells the server which subscription it became.
+  async function resume() {
+    var qs = new URLSearchParams(window.location.search);
+    var cs = qs.get("session_id") || qs.get("session");
+    if (!cs) return;
+    for (var i = 0; i < 40; i++) {
+      var r = await fetch("/session/" + cs);
+      if (r.ok) {
+        var link = await r.json();
+        await adopt(link.sub);
+        var stashed = sessionStorage.getItem("nw_code");
+        sessionStorage.removeItem("nw_code");
+        if (stashed) { code.value = stashed; await execute(); }
+        return;
+      }
+      await new Promise(function (rr) { setTimeout(rr, 500); });
+    }
+  }
+
+  async function execute() {
+    run.disabled = true;
+    out.textContent = "Running…";
+    try {
+      var res = await fetch("/run?sub=" + (sub || "none"), { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ code: code.value }) });
+      if (res.status === 409) {
+        var next = await res.json();                 // no session yet: authorise once, then come back
+        sessionStorage.setItem("nw_code", code.value);
+        window.location.href = next.checkout_url;
+        return;
+      }
+      var body = await res.json();
+      if (res.status === 429) { out.textContent = body.error; out.className = "has"; return; }
+      out.textContent = body.ok ? (body.logs && body.logs.length ? body.logs.join("\n") + "\n" : "") + String(body.result) + "  (" + body.ms + "ms)" : body.error;
+      out.className = "has";
+    } finally {
+      run.disabled = false;
+    }
+  }
+
+  run.addEventListener("click", function () { void execute(); });
+  window.addEventListener("pagehide", function () { if (sub && navigator.sendBeacon) navigator.sendBeacon("/end?sub=" + sub); });
+  void resume();
+})();
+</script>
+</body>
+</html>

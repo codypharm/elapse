@@ -1,3 +1,5 @@
+import { InvokeCommand } from "@aws-sdk/client-lambda";
+
 /**
  * FR-EXM-121: the code executor as a deep module. One interface, two implementations:
  * `awsRunner` invokes the real Lambda runner; `mockRunner` is a deterministic, network-free
@@ -21,11 +23,16 @@ export function mockRunner(): Executor {
   };
 }
 
-import { InvokeCommand } from "@aws-sdk/client-lambda";
 
 /** The slice of the Lambda client awsRunner uses, so tests can inject a fake. */
 export interface Invoker {
-  send(command: InvokeCommand): Promise<{ Payload?: Uint8Array; FunctionError?: string; StatusCode?: number }>;
+  // The AWS SDK really does hand these back as possibly-undefined, so say so rather than
+  // casting at the call site (the package is built with exactOptionalPropertyTypes).
+  send(command: InvokeCommand): Promise<{
+    Payload?: Uint8Array | undefined;
+    FunctionError?: string | undefined;
+    StatusCode?: number | undefined;
+  }>;
 }
 
 /** Invokes the real Lambda runner (FR-EXM-122) and returns its RunResult. */
