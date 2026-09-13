@@ -46,6 +46,8 @@ jobs:
         run: pnpm --filter @elapse/sdk build && pnpm --filter @elapse/sdk test
       - name: Example merchant
         run: pnpm --filter elapse-example-saas typecheck && pnpm --filter elapse-example-saas test
+      - name: Example merchant (lambda, runner mocked — never calls AWS)
+        run: pnpm --filter elapse-example-lambda typecheck && pnpm --filter elapse-example-lambda test
       - name: Web
         run: pnpm --filter web lint && pnpm --filter web typecheck && pnpm --filter web test
       - name: API (includes the committed openapi.json freshness test)
@@ -118,3 +120,28 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Steps 2–6 (FR-DOC-012, FR-EXM-031)
         run: bash docs-site/ci/quickstart.sh
+
+  lambda-example:
+    name: Lambda example against a local platform
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: elapse
+          POSTGRES_PASSWORD: elapse
+          POSTGRES_DB: elapse_ci
+        ports: ["55434:5432"]
+        options: --health-cmd "pg_isready -U elapse" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: "${{ env.PNPM_VERSION }}" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - uses: oven-sh/setup-bun@v2
+        with: { bun-version: "${{ env.BUN_VERSION }}" }
+      - run: pnpm install --frozen-lockfile
+      - name: Session opened and closed by webhook, runner mocked (FR-EXM-151)
+        run: bash examples/lambda/ci/integration.sh
